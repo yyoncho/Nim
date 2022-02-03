@@ -397,7 +397,9 @@ proc `[]=`*(obj: JsonNode, key: string, val: JsonNode) {.inline.} =
 proc `%`*[T: object](o: T): JsonNode =
   ## Construct JsonNode from tuples and objects.
   result = newJObject()
-  for k, v in o.fieldPairs: result[k] = %v
+  for k, v in o.fieldPairs:
+    let node = %v
+    result[k] = if node.isNil: newJNull() else: node
 
 proc `%`*(o: ref object): JsonNode =
   ## Generic constructor for JSON data. Creates a new `JObject JsonNode`
@@ -819,8 +821,11 @@ proc pretty*(node: JsonNode, indent = 2): string =
 
 proc `$`*(node: JsonNode): string =
   ## Converts `node` to its JSON Representation on one line.
-  result = newStringOfCap(node.len shl 1)
-  toUgly(result, node)
+  if node.isNil:
+    result = "null";
+  else:
+    result = newStringOfCap(node.len shl 1)
+    toUgly(result, node)
 
 iterator items*(node: JsonNode): JsonNode =
   ## Iterator for the items of `node`. `node` has to be a JArray.
