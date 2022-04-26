@@ -381,6 +381,7 @@ proc semOrdinal(c: PContext, n: PNode, prev: PType): PType =
     result = newOrPrevType(tyError, prev, c)
 
 proc semTypeIdent(c: PContext, n: PNode): PSym =
+  dbg "semTypeIdent > " & $n.kind
   if n.kind == nkSym:
     result = getGenSym(c, n.sym)
   else:
@@ -978,6 +979,11 @@ proc findEnforcedStaticType(t: PType): PType =
       if t != nil: return t
 
 proc addParamOrResult(c: PContext, param: PSym, kind: TSymKind) =
+  dbg " $ addParamOrResult > " & $param
+
+  if not param.typ.isNil:
+    dbg " $ addParamOrResult > " & $param.typ.n
+
   if kind == skMacro:
     let staticType = findEnforcedStaticType(param.typ)
     if staticType != nil:
@@ -1205,6 +1211,7 @@ proc newProcType(c: PContext; info: TLineInfo; prev: PType = nil): PType =
   # the effects are now stored in there too ... this is a bit hacky, but as
   # usual we desperately try to save memory:
   result.n.add newNodeI(nkEffectList, info)
+  dbg " > $newProcType" & $result.n
 
 proc isMagic(sym: PSym): bool =
   let nPragmas = sym.ast[pragmasPos]
@@ -1239,11 +1246,13 @@ proc semProcTypeNode(c: PContext, n, genericParams: PNode,
 
     if hasType:
       typ = semParamType(c, a[^2], constraint)
+      if typ != nil:
+        dbg ">>> semProcTypeNode > afterHasType > " & $typ.sym
+
       # TODO: Disallow typed/untyped in procs in the compiler/stdlib
       if kind in {skProc, skFunc} and (typ.kind == tyTyped or typ.kind == tyUntyped):
         if not isMagic(getCurrOwner(c)):
           localError(c.config, a[^2].info, "'" & typ.sym.name.s & "' is only allowed in templates and macros or magic procs")
-
 
     if hasDefault:
       def = a[^1]
@@ -1272,6 +1281,9 @@ proc semProcTypeNode(c: PContext, n, genericParams: PNode,
           # the proc to be the unbound typedesc type:
           typ = newTypeWithSons(c, tyTypeDesc, @[newTypeS(tyNone, c)])
           typ.flags.incl tfCheckedForDestructor
+          if typ != nil:
+            dbg ">>> semProcTypeNode > after newTypeWithSons> " & $typ.sym
+
 
       else:
         # if def.typ != nil and def.typ.kind != tyNone:
@@ -1297,7 +1309,8 @@ proc semProcTypeNode(c: PContext, n, genericParams: PNode,
         pragma(c, arg, a[j][1], paramPragmas)
       if not hasType and not hasDefault and kind notin {skTemplate, skMacro}:
         let param = strTableGet(c.signatures, arg.name)
-        if param != nil: typ = param.typ
+        if param != nil:
+          typ = param.typ
         else:
           localError(c.config, a.info, "parameter '$1' requires a type" % arg.name.s)
           typ = errorType(c)
@@ -1724,6 +1737,9 @@ proc semTypeNode(c: PContext, n: PNode, prev: PType): PType =
   inc c.inTypeContext
 
   if c.config.cmd == cmdIdeTools: suggestExpr(c, n)
+  dbg "< semTypeNode >>" & $n.kind
+  dbg "< semTypeNode >>" & $n
+
   case n.kind
   of nkEmpty: result = n.typ
   of nkTypeOfExpr:

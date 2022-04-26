@@ -212,10 +212,10 @@ proc searchInScopes*(c: PContext, s: PIdent; ambiguous: var bool): PSym =
   for scope in allScopes(c.currentScope):
     result = strTableGet(scope.symbols, s)
     if result != nil:
-      dbg "searchInScopes(return) >" & $result
+      # dbg "searchInScopes(return) >" & $result
       return result
   result = someSymFromImportTable(c, s, ambiguous)
-  dbg "searchInScopes >" & $result
+  # dbg "searchInScopes >" & $result
 
 
 proc searchInScopesFilterBy*(c: PContext, s: PIdent, filter: TSymKinds): seq[PSym] =
@@ -614,6 +614,8 @@ proc qualifiedLookUp*(c: PContext, n: PNode, flags: set[TLookupFlag]): PSym =
 proc initOverloadIter*(o: var TOverloadIter, c: PContext, n: PNode): PSym =
   o.importIdx = -1
   o.marked = initIntSet()
+  dbg "** initOverloadIter >>" & $n
+  dbg "** initOverloadIter >>" & $n.kind
   case n.kind
   of nkIdent, nkAccQuoted:
     var ident = considerQuotedIdent(c, n)

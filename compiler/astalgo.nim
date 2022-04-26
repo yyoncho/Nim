@@ -10,6 +10,7 @@
 # Algorithms for the abstract syntax tree: hash tables, lists
 # and sets of nodes are supported. Efficiency is important as
 # the data structures here are used in various places of the compiler.
+import renderer
 
 import
   ast, hashes, intsets, strutils, options, lineinfos, ropes, idents, rodutils,
@@ -759,12 +760,19 @@ proc strTableEnlarge(t: var TStrTable) =
   swap(t.data, n)
 
 proc strTableAdd*(t: var TStrTable, n: PSym) =
+  # dbg " strTableAdd >> " & $n
   if mustRehash(t.data.len, t.counter): strTableEnlarge(t)
   strTableRawInsert(t.data, n)
   inc(t.counter)
 
 proc strTableInclReportConflict*(t: var TStrTable, n: PSym;
                                  onConflictKeepOld = false): PSym =
+  dbg " strTableInclReportConflict >> " & $n
+  dbg " strTableInclReportConflict > kind > " & $n.kind
+  if contains($n, "pkgInfo"):
+    printStackTrace()
+  if not n.typ.isNil:
+    dbg " strTableInclReportConflict > typ > " & $n.typ.n
   # if `t` has a conflicting symbol (same identifier as `n`), return it
   # otherwise return `nil`. Incl `n` to `t` unless `onConflictKeepOld = true`
   # and a conflict was found.

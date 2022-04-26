@@ -1734,6 +1734,9 @@ proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}): string =
 
 proc `$`*(n: PNode): string = n.renderTree
 
+# proc `$`*(n: PType): string =
+#   return $n.sym & $n.n
+
 proc renderModule*(n: PNode, outfile: string,
                    renderFlags: TRenderFlags = {};
                    fid = FileIndex(-1);
