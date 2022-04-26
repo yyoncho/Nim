@@ -978,6 +978,8 @@ proc typeRel(c: var TCandidate, f, aOrig: PType,
   #
   # seq[seq[any]] is a strict subset of seq[any] and hence more specific.
 
+
+
   result = isNone
   assert(f != nil)
 
@@ -1640,7 +1642,7 @@ proc typeRel(c: var TCandidate, f, aOrig: PType,
         elif a.len > 0 and a.lastSon == f:
           # Needed for checking `Y` == `Addable` in the following
           #[
-            type 
+            type
               Addable = concept a, type A
                 a + a is A
               MyType[T: Addable; Y: static T] = object

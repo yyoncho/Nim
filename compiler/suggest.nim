@@ -1,3 +1,4 @@
+import renderer
 #
 #
 #           The Nim Compiler
@@ -121,6 +122,9 @@ proc symToSuggest(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info:
                   quality: range[0..100]; prefix: PrefixMatch;
                   inTypeContext: bool; scope: int;
                   useSuppliedInfo = false): Suggest =
+  dbg ("symToSuggest:start> symToSuggest")
+  printStackTrace()
+  dbg ("symToSuggest:end  > symToSuggest")
   new(result)
   result.section = section
   result.quality = quality
@@ -424,7 +428,7 @@ proc suggestFieldAccess(c: PContext, n, field: PNode, outputs: var Suggestions) 
         t = skipTypes(t[0], skipPtrs)
     elif typ.kind == tyTuple and typ.n != nil:
       suggestSymList(c, typ.n, field, n.info, outputs)
-    
+
     suggestOperations(c, n, field, orig, outputs)
     if typ != orig:
       suggestOperations(c, n, field, typ, outputs)
@@ -478,10 +482,16 @@ when defined(nimsuggest):
       let x = if info == s.info and info.col == s.info.col: ideDef else: ideUse
       suggestResult(g.config, symToSuggest(g, s, isLocal=false, x, info, 100, PrefixMatch.None, false, 0))
 
+import renderer
+
 proc findDefinition(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
+  dbg ("findDefinition > " & string(toFullPathConsiderDirty(g.config, info.fileIndex)) & ":" & $info.line & ":" & $info.col)
   if s.isNil: return
+  dbg ("findDefinition > after nil check")
   if isTracked(info, g.config.m.trackPos, s.name.s.len) or (s == usageSym and sfForward notin s.flags):
+    dbg ("findDefinition > after isTracked")
     suggestResult(g.config, symToSuggest(g, s, isLocal=false, ideDef, info, 100, PrefixMatch.None, false, 0, useSuppliedInfo = s == usageSym))
+
     if sfForward notin s.flags:
       suggestQuit()
     else:
@@ -495,6 +505,7 @@ proc ensureSeq[T](x: var seq[T]) =
 
 proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; isDecl=true) {.inline.} =
   ## misnamed: should be 'symDeclared'
+  dbg("suggestSym>>" & $g.config.ideCmd & "s = " & $s)
   let conf = g.config
   when defined(nimsuggest):
     if conf.suggestVersion == 0:
@@ -580,6 +591,7 @@ proc markOwnerModuleAsUsed(c: PContext; s: PSym) =
         inc i
 
 proc markUsed(c: PContext; info: TLineInfo; s: PSym) =
+  dbg "markUsed>"
   let conf = c.config
   incl(s.flags, sfUsed)
   if s.kind == skEnumField and s.owner != nil:

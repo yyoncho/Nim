@@ -67,8 +67,13 @@ proc semOperand(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
 
 proc semExprCheck(c: PContext, n: PNode, flags: TExprFlags): PNode =
   rejectEmptyNode(n)
+  dbg "semExprCheck ||| \" " & $n & "\""
   result = semExpr(c, n, flags+{efWantValue})
 
+  if not result.typ.isNil:
+    dbg "semExprCheck | \" " & $result.typ.n & "\""
+
+  dbg "semExprCheck after semExpr \" " & $n & "\""
   let
     isEmpty = result.kind == nkEmpty
     isTypeError = result.typ != nil and result.typ.kind == tyError
@@ -83,7 +88,12 @@ proc semExprCheck(c: PContext, n: PNode, flags: TExprFlags): PNode =
     result = errorNode(c, n)
 
 proc semExprWithType(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
+  dbg "semExprWithType type(before) ->" & $n
+  dbg "semExprWithType type(before) is nil" & $n.typ.isNil & "\""
   result = semExprCheck(c, n, flags)
+  dbg "semExprWithType type(after) ->" & $result
+  dbg "semExprWithType type(after) is nil" & $result.typ.isNil & "\""
+
   if result.typ == nil and efInTypeof in flags:
     result.typ = c.voidType
   elif result.typ == nil or result.typ == c.enforceVoidContext:
@@ -95,6 +105,8 @@ proc semExprWithType(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
     result.typ = errorType(c)
   else:
     if result.typ.kind in {tyVar, tyLent}: result = newDeref(result)
+  dbg "semExprWithType type(after) \" " & $result.typ.n & "\""
+
 
 proc semExprNoDeref(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
   result = semExprCheck(c, n, flags)
@@ -1083,8 +1095,10 @@ proc lookupInRecordAndBuildCheck(c: PContext, n, r: PNode, field: PIdent,
   # transform in a node that contains the runtime check for the
   # field, if it is in a case-part...
   result = nil
+  dbg "lookupInRecordAndBuildCheck > kind =" & $r.kind
   case r.kind
   of nkRecList:
+    dbg "lookupInRecordAndBuildCheck > len =" & $r.len
     for i in 0..<r.len:
       result = lookupInRecordAndBuildCheck(c, n, r[i], field, check)
       if result != nil: return
@@ -1239,6 +1253,7 @@ proc semSym(c: PContext, n: PNode, sym: PSym, flags: TExprFlags): PNode =
   of skParam:
     markUsed(c, n.info, s)
     onUse(n.info, s)
+    dbg "semSym > X > \"" & $s.typ.n & "\""
     if s.typ != nil and s.typ.kind == tyStatic and s.typ.n != nil:
       # XXX see the hack in sigmatch.nim ...
       return s.typ.n
@@ -1367,6 +1382,8 @@ proc tryReadingTypeField(c: PContext, n: PNode, i: PIdent, ty: PType): PNode =
     result = tryReadingGenericParam(c, n, i, ty)
 
 proc builtinFieldAccess(c: PContext, n: PNode, flags: TExprFlags): PNode =
+  dbg ("builtinFieldAccess >")
+  # printStackTrace()
   ## returns nil if it's not a built-in field access
   checkSonsLen(n, 2, c.config)
   # tests/bind/tbindoverload.nim wants an early exit here, but seems to
@@ -1388,13 +1405,17 @@ proc builtinFieldAccess(c: PContext, n: PNode, flags: TExprFlags): PNode =
       result = semSym(c, n, s, flags)
     onUse(n[1].info, s)
     return
-
+  dbg ("builtinFieldAccess after qualifiedLookUp >")
   n[0] = semExprWithType(c, n[0], flags+{efDetermineType, efWantIterable})
   #restoreOldStyleType(n[0])
   var i = considerQuotedIdent(c, n[1], n)
   var ty = n[0].typ
   var f: PSym = nil
   result = nil
+
+  dbg "builtinFieldAccess 1> lookupInRecordAndBuildCheck > ty =\"" & $ty & "\""
+  dbg "builtinFieldAccess 1> lookupInRecordAndBuildCheck > ty.n =\"" & $ty.n & "\""
+  dbg "builtinFieldAccess 1> lookupInRecordAndBuildCheck > ty.kind =\"" & $ty.kind & "\""
 
   if ty.kind == tyTypeDesc:
     if ty.base.kind == tyNone:
@@ -1415,18 +1436,24 @@ proc builtinFieldAccess(c: PContext, n: PNode, flags: TExprFlags): PNode =
     # a type error doesn't have any builtin fields
     return nil
 
+  dbg "builtinFieldAccess 2> lookupInRecordAndBuildCheck > ty =\"" & $ty & "\""
+  dbg "builtinFieldAccess 2> lookupInRecordAndBuildCheck > ty.n =\"" & $ty.n & "\""
   if ty.kind in tyUserTypeClasses and ty.isResolvedUserTypeClass:
     ty = ty.lastSon
   ty = skipTypes(ty, {tyGenericInst, tyVar, tyLent, tyPtr, tyRef, tyOwned, tyAlias, tySink, tyStatic})
   while tfBorrowDot in ty.flags: ty = ty.skipTypes({tyDistinct, tyGenericInst, tyAlias})
   var check: PNode = nil
+  dbg ("builtinFieldAccess before `if ty.kind == tyObject:`")
   if ty.kind == tyObject:
     while true:
       check = nil
       f = lookupInRecordAndBuildCheck(c, n, ty.n, i, check)
+      dbg "builtinFieldAccess > lookupInRecordAndBuildCheck > ty =\"" & $ty & "\""
+      dbg "builtinFieldAccess > lookupInRecordAndBuildCheck > ty.n =\"" & $ty.n & "\""
       if f != nil: break
       if ty[0] == nil: break
       ty = skipTypes(ty[0], skipPtrs)
+    dbg ("builtinFieldAccess before `if f != nil:`")
     if f != nil:
       let visibilityCheckNeeded =
         if n[1].kind == nkSym and n[1].sym == f:
@@ -1434,6 +1461,7 @@ proc builtinFieldAccess(c: PContext, n: PNode, flags: TExprFlags): PNode =
         else: true
       if not visibilityCheckNeeded or fieldVisible(c, f):
         # is the access to a public field or in the same module or in a friend?
+        dbg ("builtinFieldAccess before `markUsed`")
         markUsed(c, n[1].info, f)
         onUse(n[1].info, f)
         n[0] = makeDeref(n[0])
@@ -1472,12 +1500,17 @@ proc dotTransformation(c: PContext, n: PNode): PNode =
     result.add newIdentNode(i, n[1].info)
     result.add copyTree(n[0])
 
+import renderer
+
 proc semFieldAccess(c: PContext, n: PNode, flags: TExprFlags): PNode =
   # this is difficult, because the '.' is used in many different contexts
   # in Nim. We first allow types in the semantic checking.
+  dbg ("semFieldAccess> " & $n)
   result = builtinFieldAccess(c, n, flags)
   if result == nil:
     result = dotTransformation(c, n)
+    dbg ("semFieldAccess< dotTransformation  "  & $result)
+  dbg ("semFieldAccess< " & $result)
 
 proc buildOverloadedSubscripts(n: PNode, ident: PIdent): PNode =
   result = newNodeI(nkCall, n.info)
@@ -2779,6 +2812,12 @@ proc semPragmaStmt(c: PContext; n: PNode) =
     pragma(c, c.p.owner, n, stmtPragmas, true)
 
 proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
+  # dbg "semExpr >>> " & $n
+  dbg "semExpr >>> kind = " & $n.kind
+  if n.kind == nkDotExpr:
+    dbg "semExpr >>> typNODE = " & $n[0].typ
+    dbg "semExpr >>> NODE = " & $n[0]
+
   when defined(nimCompilerStacktraceHints):
     setFrameMsg c.config$n.info & " " & $n.kind
   when false: # see `tdebugutils`
@@ -2800,7 +2839,10 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
       else:
         {checkUndeclared, checkModule, checkAmbiguity, checkPureEnumFields}
     var s = qualifiedLookUp(c, n, checks)
+    dbg "semExpr > nkIdent > " & $s
+    dbg "semExpr > nkIdent > kind > " & $s.kind
     if c.matchedConcept == nil: semCaptureSym(s, c.p.owner)
+    dbg "semExpr > nkIdent > kind > " & $s.kind
     case s.kind
     of skProc, skFunc, skMethod, skConverter, skIterator:
       #performProcvarCheck(c, n, s)
@@ -2818,6 +2860,7 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
       else:
         result = semSym(c, n, s, flags)
     else:
+      dbg "semExpr > nkIdent > passing"
       result = semSym(c, n, s, flags)
   of nkSym:
     # because of the changed symbol binding, this does not mean that we
@@ -2860,8 +2903,10 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
   of nkCharLit:
     if result.typ == nil: result.typ = getSysType(c.graph, n.info, tyChar)
   of nkDotExpr:
+    dbg "semExpr before transformation" & $n
     result = semFieldAccess(c, n, flags)
     if result.kind == nkDotCall:
+      dbg "semExpr after transformation > " & $result
       result.transitionSonsKind(nkCall)
       result = semExpr(c, result, flags)
   of nkBind:

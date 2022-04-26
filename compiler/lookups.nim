@@ -1,4 +1,5 @@
 #
+import renderer
 #
 #           The Nim Compiler
 #        (c) Copyright 2015 Andreas Rumpf
@@ -194,24 +195,28 @@ proc someSymFromImportTable*(c: PContext; name: PIdent; ambiguous: var bool): PS
           ambiguous = true
           break outer
 
-proc searchInScopes*(c: PContext, s: PIdent; ambiguous: var bool): PSym =
-  for scope in allScopes(c.currentScope):
-    result = strTableGet(scope.symbols, s)
-    if result != nil: return result
-  result = someSymFromImportTable(c, s, ambiguous)
-
 proc debugScopes*(c: PContext; limit=0, max = int.high) {.deprecated.} =
   var i = 0
   var count = 0
   for scope in allScopes(c.currentScope):
-    echo "scope ", i
+    dbg "scope > " & $i
     for h in 0..high(scope.symbols.data):
       if scope.symbols.data[h] != nil:
         if count >= max: return
-        echo count, ": ", scope.symbols.data[h].name.s
+        dbg $count & ": " & scope.symbols.data[h].name.s
         count.inc
     if i == limit: return
     inc i
+
+proc searchInScopes*(c: PContext, s: PIdent; ambiguous: var bool): PSym =
+  for scope in allScopes(c.currentScope):
+    result = strTableGet(scope.symbols, s)
+    if result != nil:
+      dbg "searchInScopes(return) >" & $result
+      return result
+  result = someSymFromImportTable(c, s, ambiguous)
+  dbg "searchInScopes >" & $result
+
 
 proc searchInScopesFilterBy*(c: PContext, s: PIdent, filter: TSymKinds): seq[PSym] =
   result = @[]
@@ -544,12 +549,16 @@ type
 
 proc qualifiedLookUp*(c: PContext, n: PNode, flags: set[TLookupFlag]): PSym =
   const allExceptModule = {low(TSymKind)..high(TSymKind)} - {skModule, skPackage}
+  dbg ("lookup< " & $n)
   case n.kind
   of nkIdent, nkAccQuoted:
     var amb = false
     var ident = considerQuotedIdent(c, n)
     if checkModule in flags:
+      dbg "searchInScopes"
       result = searchInScopes(c, ident, amb).skipAlias(n, c.config)
+      if not result.isNil and not result.typ.isNil:
+        dbg "searchInScopes > \"" & $result.typ.n & " \" "
     else:
       let candidates = searchInScopesFilterBy(c, ident, allExceptModule) #.skipAlias(n, c.config)
       if candidates.len > 0:
@@ -599,6 +608,8 @@ proc qualifiedLookUp*(c: PContext, n: PNode, flags: set[TLookupFlag]): PSym =
     result = nil
   when false:
     if result != nil and result.kind == skStub: loadStub(result)
+
+  dbg ("lookup> " & $result)
 
 proc initOverloadIter*(o: var TOverloadIter, c: PContext, n: PNode): PSym =
   o.importIdx = -1
@@ -782,4 +793,3 @@ proc pickSym*(c: PContext, n: PNode; kinds: set[TSymKind];
       if result == nil: result = a
       else: return nil # ambiguous
     a = nextOverloadIter(o, c, n)
-

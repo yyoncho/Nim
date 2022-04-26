@@ -306,6 +306,8 @@ proc identWithin(n: PNode, s: PIdent): bool =
     if identWithin(n[i], s): return true
   result = n.kind == nkSym and n.sym.name.id == s.id
 
+import renderer
+
 proc semIdentDef(c: PContext, n: PNode, kind: TSymKind, reportToNimsuggest = true): PSym =
   if isTopLevel(c):
     result = semIdentWithPragma(c, kind, n, {sfExported})
@@ -483,7 +485,7 @@ proc semVarMacroPragma(c: PContext, a: PNode, n: PNode): PNode =
     for i in 0 ..< pragmas.len:
       let it = pragmas[i]
       let key = if it.kind in nkPragmaCallKinds and it.len >= 1: it[0] else: it
-      
+
       when false:
         let lhs = b[0]
         let clash = strTableGet(c.currentScope.symbols, lhs.ident)

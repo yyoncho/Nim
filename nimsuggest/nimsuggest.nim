@@ -9,6 +9,8 @@
 
 ## Nimsuggest is a tool that helps to give editors IDE like capabilities.
 
+import compiler/renderer
+
 when not defined(nimcore):
   {.error: "nimcore MUST be defined for Nim's core tooling".}
 
@@ -88,7 +90,7 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     forth: $sev))
 
 proc myLog(s: string) =
-  if gLogging: log(s)
+  dbg s
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -492,6 +494,7 @@ proc mainThread(graph: ModuleGraph) =
   while true:
     let (hasData, req) = requests.tryRecv()
     if hasData:
+      dbg("# " & req)
       conf.writelnHook = wrHook
       conf.suggestionResultHook = sugResultHook
       execCmd(req, graph, cachedMsgs)

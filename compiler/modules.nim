@@ -1,3 +1,4 @@
+import renderer
 #
 #
 #           The Nim Compiler
@@ -91,24 +92,28 @@ proc compileModule*(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags, fr
   var flags = flags
   if fileIdx == graph.config.projectMainIdx2: flags.incl sfMainModule
   result = graph.getModule(fileIdx)
-
+  dbg("compileModule:" & string(toFullPathConsiderDirty(graph.config, fileIdx)))
   template processModuleAux(moduleStatus) =
+    dbg("compileModule: statatus = " & moduleStatus)
     onProcessing(graph, fileIdx, moduleStatus, fromModule = fromModule)
     var s: PLLStream
     if sfMainModule in flags:
       if graph.config.projectIsStdin: s = stdin.llStreamOpen
       elif graph.config.projectIsCmd: s = llStreamOpen(graph.config.cmdInput)
     discard processModule(graph, result, idGeneratorFromModule(result), s)
+  dbg ("1> result > " & $(result == nil))
   if result == nil:
     var cachedModules: seq[FileIndex]
     result = moduleFromRodFile(graph, fileIdx, cachedModules)
     let filename = AbsoluteFile toFullPath(graph.config, fileIdx)
+    dbg ("2> result > " & $(result == nil))
     if result == nil:
       result = newModule(graph, fileIdx)
       result.flags.incl flags
       registerModule(graph, result)
       processModuleAux("import")
     else:
+      dbg ("result != null")
       if sfSystemModule in flags:
         graph.systemModule = result
       partialInitModule(result, graph, fileIdx, filename)
@@ -123,6 +128,7 @@ proc compileModule*(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags, fr
     result.ast = nil
     processModuleAux("import(dirty)")
     graph.markClientsDirty(fileIdx)
+  dbg("compileModule: DONE: " & string(toFullPathConsiderDirty(graph.config, fileIdx)))
 
 proc importModule*(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
   # this is called by the semantic checking phase

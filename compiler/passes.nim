@@ -1,4 +1,5 @@
 #
+import renderer
 #
 #           The Nim Compiler
 #        (c) Copyright 2012 Andreas Rumpf
@@ -122,12 +123,14 @@ proc partOfStdlib(x: PSym): bool =
 
 proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                     stream: PLLStream): bool {.discardable.} =
+  dbg "processModule -> stop = " & $graph.stopCompile()
   if graph.stopCompile(): return true
   var
     p: Parser
     a: TPassContextArray
     s: PLLStream
     fileIdx = module.fileIdx
+  dbg "processModule -> " & string(toFullPathConsiderDirty(graph.config, fileIdx))
   prepareConfigNotes(graph, module)
   openPasses(graph, a, module, idgen)
   if stream == nil:
@@ -138,6 +141,9 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       return false
   else:
     s = stream
+
+  # printStackTrace()
+
   while true:
     openParser(p, fileIdx, s, graph.cache, graph.config)
 

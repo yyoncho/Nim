@@ -1,3 +1,4 @@
+import renderer
 #
 #
 #           The Nim Compiler
@@ -266,6 +267,7 @@ proc transformImportAs(c: PContext; n: PNode): tuple[node: PNode, importHidden: 
 
 proc myImportModule(c: PContext, n: var PNode, importStmtResult: PNode): PSym =
   let transf = transformImportAs(c, n)
+  dbg ("myImportModule")
   n = transf.node
   let f = checkModuleName(c.config, n)
   if f != InvalidFileIdx:
@@ -319,10 +321,17 @@ proc impMod(c: PContext; it: PNode; importStmtResult: PNode) =
     #importForwarded(c, m.ast, emptySet, m)
     afterImport(c, m)
 
+# proc dbg*(s: string) =
+#   let f = open("/tmp/foo2", fmAppend)
+#   writeLine(f, s)
+#   close(f)
+
 proc evalImport*(c: PContext, n: PNode): PNode =
+  dbg("*** " & $n)
   result = newNodeI(nkImportStmt, n.info)
   for i in 0..<n.len:
     let it = n[i]
+    # dbg("* kind = " & $it.kind & ", len = " & $it.len & ", kind =" & $it[2].kind)
     if it.kind == nkInfix and it.len == 3 and it[2].kind == nkBracket:
       let sep = it[0]
       let dir = it[1]
@@ -341,6 +350,7 @@ proc evalImport*(c: PContext, n: PNode): PNode =
           imp[2] = x
           impMod(c, imp, result)
     else:
+      dbg("*** importing " & $n)
       impMod(c, it, result)
 
 proc evalFrom*(c: PContext, n: PNode): PNode =

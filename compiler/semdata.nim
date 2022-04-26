@@ -253,13 +253,15 @@ proc get*(p: PProcCon; key: PSym): PSym =
   if not p.mappingExists: return nil
   result = PSym(p.mapping.idTableGet(key))
 
+import renderer
+
 proc getGenSym*(c: PContext; s: PSym): PSym =
   if sfGenSym notin s.flags: return s
   var it = c.p
   while it != nil:
     result = get(it, s)
     if result != nil:
-      #echo "got from table ", result.name.s, " ", result.info
+      dbg "getGenSym > got from table " & $result.name.s & " " # & result.info
       return result
     it = it.next
   result = s
