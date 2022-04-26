@@ -760,7 +760,10 @@ proc strTableEnlarge(t: var TStrTable) =
   swap(t.data, n)
 
 proc strTableAdd*(t: var TStrTable, n: PSym) =
-  # dbg " strTableAdd >> " & $n
+  dbg " strTableAdd >> " & $n
+  dbg " strTableAdd > kind > " & $n.kind
+  if contains($n, "PackageInfo@"):
+    dbg "XXXX strTableAdd > kind > " & $n.typ.n
   if mustRehash(t.data.len, t.counter): strTableEnlarge(t)
   strTableRawInsert(t.data, n)
   inc(t.counter)
@@ -769,8 +772,8 @@ proc strTableInclReportConflict*(t: var TStrTable, n: PSym;
                                  onConflictKeepOld = false): PSym =
   dbg " strTableInclReportConflict >> " & $n
   dbg " strTableInclReportConflict > kind > " & $n.kind
-  if contains($n, "pkgInfo"):
-    printStackTrace()
+  # if contains($n, "pkgInfo"):
+  #   printStackTrace()
   if not n.typ.isNil:
     dbg " strTableInclReportConflict > typ > " & $n.typ.n
   # if `t` has a conflicting symbol (same identifier as `n`), return it
@@ -815,7 +818,8 @@ proc strTableGet*(t: TStrTable, name: PIdent): PSym =
     if result == nil: break
     if result.name.id == name.id: break
     h = nextTry(h, high(t.data))
-
+  if contains($result, "PackageInfo@"):
+    dbg "XXXX strTableGet > " & $result.typ.n
 
 type
   TIdentIter* = object # iterator over all syms with same identifier
@@ -834,6 +838,8 @@ proc nextIdentIter*(ti: var TIdentIter, tab: TStrTable): PSym =
       break
     result = tab.data[h]
   ti.h = nextTry(h, high(tab.data))
+  if contains($result, "PackageInfo@"):
+    dbg "XXXX nextIdentIter > " & $result.typ.n
 
 proc initIdentIter*(ti: var TIdentIter, tab: TStrTable, s: PIdent): PSym =
   ti.h = s.h

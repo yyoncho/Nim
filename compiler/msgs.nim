@@ -160,7 +160,21 @@ proc suggestWriteln*(conf: ConfigRef; s: string) =
 proc msgQuit*(x: int8) = quit x
 proc msgQuit*(x: string) = quit x
 
+
+proc dbg2*(s: string) =
+  let f = open("/tmp/foo", fmAppend)
+  writeLine(f, s)
+  close(f)
+
+template printStackTrace2*() =
+  try:
+    raise newException(ValueError, "x")
+  except ValueError as e:
+    dbg2 ($e.getStackTrace())
+
 proc suggestQuit*() =
+  # dbg2 "suggestQuit >> "
+  # printStackTrace2()
   raise newException(ESuggestDone, "suggest done")
 
 # this format is understood by many text editors: it is the same that
