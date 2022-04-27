@@ -161,7 +161,8 @@ proc msgQuit*(x: int8) = quit x
 proc msgQuit*(x: string) = quit x
 
 proc suggestQuit*() =
-  raise newException(ESuggestDone, "suggest done")
+  discard
+  # raise newException(ESuggestDone, "suggest done")
 
 # this format is understood by many text editors: it is the same that
 # Borland and Freepascal use
