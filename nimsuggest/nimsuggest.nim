@@ -163,14 +163,15 @@ proc listEpc(): SexpNode =
     result.add(methodDesc)
 
 proc findNode(n: PNode; trackPos: TLineInfo): PSym =
-  dbg "findNode > checking node " & $n.kind
-  dbg "findNode:" & $trackPos.col & ":" & $trackPos.line
+  # dbg "findNode > checking node " & $n.kind
   if n.kind == nkSym:
-    dbg "findNode > nkSym > " & $n.sym.name.s
-    dbg "findNode: symbol >>>> " & $n.info.col & ":" & $n.info.line
+    dbg "findNode: nkSym -------------------- " & $n.sym.name.s
+    dbg "findNode: nkSym > " & $n.sym.name.s
+    dbg "findNode: trackPos >" & $trackPos.line & ":" & $trackPos.col
+    dbg "findNode: n.info > " & $n.info.line & ":" & $n.info.col
 
     if isTracked(n.info, trackPos, n.sym.name.s.len):
-      dbg "findNode > tracked" & $n.kind
+      # dbg "findNode > tracked" & $n.kind
       return n.sym
   else:
     for i in 0 ..< safeLen(n):
@@ -180,7 +181,6 @@ proc findNode(n: PNode; trackPos: TLineInfo): PSym =
 proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
   let m = graph.getModule(trackPos.fileIndex)
   if m != nil and m.ast != nil:
-    dbg "symFromInfo XXXXXXX"
     result = findNode(m.ast, trackPos)
 
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;

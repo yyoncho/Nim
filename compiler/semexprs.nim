@@ -1436,8 +1436,11 @@ proc builtinFieldAccess(c: PContext, n: PNode, flags: TExprFlags): PNode =
         # is the access to a public field or in the same module or in a friend?
         markUsed(c, n[1].info, f)
         onUse(n[1].info, f)
+        let info = n[1].info
         n[0] = makeDeref(n[0])
         n[1] = newSymNode(f) # we now have the correct field
+        # preserve the original info
+        n[1].info = info
         n.typ = f.typ
         if check == nil:
           result = n
@@ -2789,6 +2792,9 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
         echo ("<", c.config$n.info, n, ?.result.typ)
 
   result = n
+  # dbg "semExpr > " & $n
+  # dbg "semExpr > kind > " & $n.kind
+  # dbg "semExpr > info > " & $n.info.line & ":" & $n.info.col
   if c.config.cmd == cmdIdeTools: suggestExpr(c, n)
   if nfSem in n.flags: return
   case n.kind
@@ -3087,3 +3093,6 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
     localError(c.config, n.info, "invalid expression: " &
                renderTree(n, {renderNoComments}))
   if result != nil: incl(result.flags, nfSem)
+  # dbg "semExpr > result > " & $result
+  # dbg "semExpr > result > kind > " & $result.kind
+  # dbg "semExpr > result > info > " & $result.info.line & ":" & $result.info.col
