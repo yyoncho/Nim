@@ -124,8 +124,8 @@ proc symToSuggest(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info:
 
   new(result)
   dbg(" symToSuggest >>")
-  printStackTrace()
-  dbg(" symToSuggest <>")
+  # printStackTrace()
+  dbg(" symToSuggest <<")
   result.section = section
   result.quality = quality
   result.isGlobal = sfGlobal in s.flags
@@ -215,7 +215,7 @@ proc `$`*(suggest: Suggest): string =
         result.add($suggest.prefix)
 
 proc suggestResult(conf: ConfigRef; s: Suggest) =
-  dbg "suggestResult >>> "
+  # dbg "suggestResult >>> "
   if not isNil(conf.suggestionResultHook):
     conf.suggestionResultHook(s)
   else:
@@ -470,6 +470,7 @@ when defined(nimsuggest):
 proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
   if g.config.suggestVersion == 1:
     if usageSym == nil and isTracked(info, g.config.m.trackPos, s.name.s.len):
+      dbg "findUsage: >>>>>" & $s
       usageSym = s
       suggestResult(g.config, symToSuggest(g, s, isLocal=false, ideUse, info, 100, PrefixMatch.None, false, 0))
     elif s == usageSym:
@@ -479,7 +480,8 @@ proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
 
 when defined(nimsuggest):
   proc listUsages*(g: ModuleGraph; s: PSym) =
-    #echo "usages ", s.allUsages.len
+    dbg "listUsages > " & $s
+    dbg "listUsages > " & $s.allUsages.len
     for info in s.allUsages:
       let x = if info == s.info and info.col == s.info.col: ideDef else: ideUse
       suggestResult(g.config, symToSuggest(g, s, isLocal=false, x, info, 100, PrefixMatch.None, false, 0))
@@ -491,6 +493,7 @@ proc findDefinition(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym
     if sfForward notin s.flags:
       suggestQuit()
     else:
+      dbg "findDefinition: >>>>>" & $s
       usageSym = s
 
 proc ensureIdx[T](x: var T, y: int) =
@@ -501,9 +504,9 @@ proc ensureSeq[T](x: var seq[T]) =
 
 proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; isDecl=true) {.inline.} =
   ## misnamed: should be 'symDeclared'
-  dbg "suggestSym >>> " & $s
-  printStackTrace()
-  dbg "suggestSym <<< " & $s
+  # dbg "suggestSym >>> " & $s
+  # # printStackTrace()
+  # dbg "suggestSym <<< " & $s
   let conf = g.config
   when defined(nimsuggest):
     if conf.suggestVersion == 0:

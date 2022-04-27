@@ -94,7 +94,7 @@ template printStackTrace*() =
     dbg ($e.getStackTrace())
 
 proc sugResultHook(s: Suggest) =
-  printStackTrace()
+  # printStackTrace()
   results.send(s)
 
 proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
@@ -163,9 +163,15 @@ proc listEpc(): SexpNode =
     result.add(methodDesc)
 
 proc findNode(n: PNode; trackPos: TLineInfo): PSym =
-  #echo "checking node ", n.info
+  dbg "findNode > checking node " & $n.kind
+  dbg "findNode:" & $trackPos.col & ":" & $trackPos.line
   if n.kind == nkSym:
-    if isTracked(n.info, trackPos, n.sym.name.s.len): return n.sym
+    dbg "findNode > nkSym > " & $n.sym.name.s
+    dbg "findNode: symbol >>>> " & $n.info.col & ":" & $n.info.line
+
+    if isTracked(n.info, trackPos, n.sym.name.s.len):
+      dbg "findNode > tracked" & $n.kind
+      return n.sym
   else:
     for i in 0 ..< safeLen(n):
       let res = findNode(n[i], trackPos)
@@ -174,6 +180,7 @@ proc findNode(n: PNode; trackPos: TLineInfo): PSym =
 proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
   let m = graph.getModule(trackPos.fileIndex)
   if m != nil and m.ast != nil:
+    dbg "symFromInfo XXXXXXX"
     result = findNode(m.ast, trackPos)
 
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
@@ -211,6 +218,9 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
         graph.compileProject(modIdx)
   if conf.ideCmd in {ideUse, ideDus}:
     let u = if conf.suggestVersion != 1: graph.symFromInfo(conf.m.trackPos) else: graph.usageSym
+    dbg "executeNoHooks >> " & $graph.usageSym
+    dbg "executeNoHooks >> " & $(conf.suggestVersion != 1)
+    dbg "executeNoHooks > " & $u
     if u != nil:
       listUsages(graph, u)
     else:

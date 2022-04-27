@@ -124,7 +124,6 @@ proc partOfStdlib(x: PSym): bool =
 proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                     stream: PLLStream): bool {.discardable.} =
 
-  dbg2 ("processModule XXXXXX")
   if graph.stopCompile(): return true
   var
     p: Parser
