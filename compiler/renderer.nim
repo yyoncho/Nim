@@ -1706,6 +1706,18 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
     #nkNone, nkExplicitTypeListCall:
     internalError(g.config, n.info, "renderer.gsub(" & $n.kind & ')')
 
+
+proc dbg*(s: string) =
+  let f = open("/tmp/foo", fmAppend)
+  writeLine(f, s)
+  close(f)
+
+template printStackTrace*() =
+  try:
+    raise newException(ValueError, "x")
+  except ValueError as e:
+    dbg ($e.getStackTrace())
+
 proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}): string =
   if n == nil: return "<nil tree>"
   var g: TSrcGen
