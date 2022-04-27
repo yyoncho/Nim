@@ -9,8 +9,16 @@
 
 ## Nimsuggest is a tool that helps to give editors IDE like capabilities.
 
+import compiler/renderer
+
 when not defined(nimcore):
   {.error: "nimcore MUST be defined for Nim's core tooling".}
+
+proc dbg*(s: string) =
+  let f = open("/tmp/foo", fmAppend)
+  writeLine(f, s)
+  close(f)
+
 
 import strutils, os, parseopt, parseutils, sequtils, net, rdstdin, sexp
 # Do NOT import suggest. It will lead to weird bugs with
@@ -79,7 +87,14 @@ var
 proc writelnToChannel(line: string) =
   results.send(Suggest(section: ideMsg, doc: line))
 
+template printStackTrace*() =
+  try:
+    raise newException(ValueError, "x")
+  except ValueError as e:
+    dbg ($e.getStackTrace())
+
 proc sugResultHook(s: Suggest) =
+  printStackTrace()
   results.send(s)
 
 proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
@@ -87,8 +102,9 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     line: toLinenumber(info), column: toColumn(info), doc: msg,
     forth: $sev))
 
+
 proc myLog(s: string) =
-  if gLogging: log(s)
+  dbg s
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -166,6 +182,7 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
   myLog("cmd: " & $cmd & ", file: " & file.string &
         ", dirtyFile: " & dirtyfile.string &
         "[" & $line & ":" & $col & "]")
+  dbg ("executing CMD " & $cmd)
   conf.ideCmd = cmd
   if cmd == ideUse and conf.suggestVersion != 0:
     graph.resetAllModules()
@@ -492,6 +509,7 @@ proc mainThread(graph: ModuleGraph) =
   while true:
     let (hasData, req) = requests.tryRecv()
     if hasData:
+      dbg("# " & req)
       conf.writelnHook = wrHook
       conf.suggestionResultHook = sugResultHook
       execCmd(req, graph, cachedMsgs)
@@ -739,6 +757,7 @@ else:
     conf.writelnHook = proc (line: string) =
       retval.add(Suggest(section: ideMsg, doc: line))
     conf.suggestionResultHook = proc (s: Suggest) =
+      dbg "Reeeeeeeeeeeee"
       retval.add(s)
     conf.writelnHook = proc (s: string) =
       stderr.write s & "\n"
@@ -758,4 +777,5 @@ else:
       else:
         conf.structuredErrorHook = nil
       executeNoHooks(conf.ideCmd, file, dirtyfile, line, col, nimsuggest.graph)
+    dbg "Reeeeeeeee"
     return retval

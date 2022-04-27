@@ -6,7 +6,7 @@
 #    See the file "copying.txt", included in this
 #    distribution, for details about the copyright.
 #
-
+import renderer
 ## This module implements the passes functionality. A pass must implement the
 ## `TPass` interface.
 
@@ -120,8 +120,11 @@ proc partOfStdlib(x: PSym): bool =
     it = it.owner
   result = it != nil and it.name.s == "stdlib"
 
+
 proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                     stream: PLLStream): bool {.discardable.} =
+
+  dbg2 ("processModule XXXXXX")
   if graph.stopCompile(): return true
   var
     p: Parser

@@ -1706,8 +1706,12 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
     #nkNone, nkExplicitTypeListCall:
     internalError(g.config, n.info, "renderer.gsub(" & $n.kind & ')')
 
-
 proc dbg*(s: string) =
+  let f = open("/tmp/foo", fmAppend)
+  writeLine(f, s)
+  close(f)
+
+proc dbg2*(s: string) =
   let f = open("/tmp/foo", fmAppend)
   writeLine(f, s)
   close(f)

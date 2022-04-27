@@ -121,7 +121,11 @@ proc symToSuggest(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info:
                   quality: range[0..100]; prefix: PrefixMatch;
                   inTypeContext: bool; scope: int;
                   useSuppliedInfo = false): Suggest =
+
   new(result)
+  dbg(" symToSuggest >>")
+  printStackTrace()
+  dbg(" symToSuggest <>")
   result.section = section
   result.quality = quality
   result.isGlobal = sfGlobal in s.flags
@@ -211,12 +215,14 @@ proc `$`*(suggest: Suggest): string =
         result.add($suggest.prefix)
 
 proc suggestResult(conf: ConfigRef; s: Suggest) =
+  dbg "suggestResult >>> "
   if not isNil(conf.suggestionResultHook):
     conf.suggestionResultHook(s)
   else:
     conf.suggestWriteln($s)
 
 proc produceOutput(a: var Suggestions; conf: ConfigRef) =
+  dbg "produceOutput >>> "
   if conf.ideCmd in {ideSug, ideCon}:
     a.sort cmpSuggestions
   when defined(debug):
@@ -424,7 +430,7 @@ proc suggestFieldAccess(c: PContext, n, field: PNode, outputs: var Suggestions) 
         t = skipTypes(t[0], skipPtrs)
     elif typ.kind == tyTuple and typ.n != nil:
       suggestSymList(c, typ.n, field, n.info, outputs)
-    
+
     suggestOperations(c, n, field, orig, outputs)
     if typ != orig:
       suggestOperations(c, n, field, typ, outputs)
@@ -495,6 +501,9 @@ proc ensureSeq[T](x: var seq[T]) =
 
 proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; isDecl=true) {.inline.} =
   ## misnamed: should be 'symDeclared'
+  dbg "suggestSym >>> " & $s
+  printStackTrace()
+  dbg "suggestSym <<< " & $s
   let conf = g.config
   when defined(nimsuggest):
     if conf.suggestVersion == 0:
