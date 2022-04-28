@@ -7,6 +7,8 @@
 #    distribution, for details about the copyright.
 #
 
+import compiler/renderer
+
 ## Nimsuggest is a tool that helps to give editors IDE like capabilities.
 
 when not defined(nimcore):
@@ -88,7 +90,8 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     forth: $sev))
 
 proc myLog(s: string) =
-  if gLogging: log(s)
+  dbg s
+  # if gLogging: log(s)
 
 const
   seps = {':', ';', ' ', '\t'}
