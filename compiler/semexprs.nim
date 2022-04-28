@@ -2783,6 +2783,9 @@ proc semPragmaStmt(c: PContext; n: PNode) =
 proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
   when defined(nimCompilerStacktraceHints):
     setFrameMsg c.config$n.info & " " & $n.kind
+  dbg "-------------------------------"
+  dbg "semExpr >> " & $n
+  dbg "semExpr >> kind >> " & $n.kind
   when false: # see `tdebugutils`
     if isCompilerDebug():
       echo (">", c.config$n.info, n, flags, n.kind)
@@ -2802,6 +2805,7 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
       else:
         {checkUndeclared, checkModule, checkAmbiguity, checkPureEnumFields}
     var s = qualifiedLookUp(c, n, checks)
+    dbg "XXXXXX >>> " & $s
     if c.matchedConcept == nil: semCaptureSym(s, c.p.owner)
     case s.kind
     of skProc, skFunc, skMethod, skConverter, skIterator:
@@ -3089,3 +3093,4 @@ proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}): PNode =
     localError(c.config, n.info, "invalid expression: " &
                renderTree(n, {renderNoComments}))
   if result != nil: incl(result.flags, nfSem)
+  dbg "-------------------------------"

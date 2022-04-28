@@ -18,9 +18,15 @@ import strutils, os, parseopt, parseutils, sequtils, net, rdstdin, sexp
 # So we import that one instead.
 import compiler / [options, commands, modules, sem,
   passes, passaux, msgs,
-  sigmatch, ast,
-  idents, modulegraphs, prefixmatches, lineinfos, cmdlinehelper,
-  pathutils]
+  sigmatch, ast, idents, modulegraphs, prefixmatches, lineinfos, cmdlinehelper, pathutils]
+
+
+proc dbg*(s: string) =
+  discard
+  # let f = open("/tmp/foo", fmAppend)
+  # writeLine(f, s)
+  # close(f)
+
 
 when defined(windows):
   import winlean
@@ -88,7 +94,8 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     forth: $sev))
 
 proc myLog(s: string) =
-  if gLogging: log(s)
+  dbg s
+  # if gLogging: log(s)
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -146,19 +153,57 @@ proc listEpc(): SexpNode =
     methodDesc.add(docstring)
     result.add(methodDesc)
 
+import compiler/renderer
+import compiler/semdata
+
+# proc findNode(n: PNode; trackPos: TLineInfo): PSym =
+#   #echo "checking node ", n.info
+#   if n.kind == nkSym:
+#     if isTracked(n.info, trackPos, n.sym.name.s.len): return n.sym
+#   else:
+#     for i in 0 ..< safeLen(n):
+#       let res = findNode(n[i], trackPos)
+#       if res != nil: return res
+
+# proc findNode(c: PContext, n: PNode; trackPos: TLineInfo): PSym =
 proc findNode(n: PNode; trackPos: TLineInfo): PSym =
-  #echo "checking node ", n.info
-  if n.kind == nkSym:
+  dbg "findNode --------------------"
+  dbg "findNode -> " & $n
+  dbg "findNode -> kind " & $n.kind
+  dbg "findNode type" & $(not n.typ.isNil)
+  if not n.typ.isNil and not n.typ.n.isNil:
+    for nn in n.typ.n:
+      dbg "findNode typ . n " & $nn.kind
+      dbg "findNode typ = " & $nn
+
+      if nn.kind == nkSym:
+        let res = findNode(nn, trackPos)
+        if res != nil: return res
+
+
+  dbg "findNode -> id " & $n.id
+  if n.kind in {nkTypeDef, nkRecList}:
+    dbg "findNode start XXXXXXXXXXXXXXX"
+    for nn in n.sons:
+      let res = findNode(nn, trackPos)
+      if res != nil: return res
+    dbg "findNode end   XXXXXXXXXXXXXXX"
+
+  elif n.kind == nkSym:
+    dbg "findNode > n > " & n.sym.name.s & $n.info.line & ":" & $n.info.col
+    dbg "findNode > trackPos" & $trackPos.line & ":" & $trackPos.col
+    dbg "findNode --------------------"
     if isTracked(n.info, trackPos, n.sym.name.s.len): return n.sym
   else:
     for i in 0 ..< safeLen(n):
       let res = findNode(n[i], trackPos)
       if res != nil: return res
 
-proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
+proc symFromInfo(c: PContext, graph: ModuleGraph; trackPos: TLineInfo): PSym =
   let m = graph.getModule(trackPos.fileIndex)
   if m != nil and m.ast != nil:
     result = findNode(m.ast, trackPos)
+
 
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
@@ -193,7 +238,8 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
       if isKnownFile:
         graph.compileProject(modIdx)
   if conf.ideCmd in {ideUse, ideDus}:
-    let u = if conf.suggestVersion != 1: graph.symFromInfo(conf.m.trackPos) else: graph.usageSym
+    let u = if conf.suggestVersion != 1: symFromInfo(nil, graph, conf.m.trackPos) else: graph.usageSym
+    dbg "executeNoHooks > " & $u
     if u != nil:
       listUsages(graph, u)
     else:

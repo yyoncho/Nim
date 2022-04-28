@@ -483,7 +483,7 @@ proc semVarMacroPragma(c: PContext, a: PNode, n: PNode): PNode =
     for i in 0 ..< pragmas.len:
       let it = pragmas[i]
       let key = if it.kind in nkPragmaCallKinds and it.len >= 1: it[0] else: it
-      
+
       when false:
         let lhs = b[0]
         let clash = strTableGet(c.currentScope.symbols, lhs.ident)
@@ -1225,6 +1225,8 @@ proc typeSectionLeftSidePass(c: PContext, n: PNode) =
   while i < n.len: # n may grow due to type pragma macros
     var a = n[i]
     when defined(nimsuggest):
+      dbg "   typeSectionLeftSidePass >>>" & $n[i]
+
       if c.config.cmd == cmdIdeTools:
         inc c.inTypeContext
         suggestStmt(c, a)

@@ -424,7 +424,7 @@ proc suggestFieldAccess(c: PContext, n, field: PNode, outputs: var Suggestions) 
         t = skipTypes(t[0], skipPtrs)
     elif typ.kind == tyTuple and typ.n != nil:
       suggestSymList(c, typ.n, field, n.info, outputs)
-    
+
     suggestOperations(c, n, field, orig, outputs)
     if typ != orig:
       suggestOperations(c, n, field, typ, outputs)
@@ -459,7 +459,10 @@ when defined(nimsuggest):
     let infoAsInt = info.infoToInt
     for infoB in s.allUsages:
       if infoB.infoToInt == infoAsInt: return
+    dbg  "addNoDup " & $s & "-----------------"
+    # printStackTrace()
     s.allUsages.add(info)
+    dbg  "addNoDup -----------------"
 
 proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
   if g.config.suggestVersion == 1:
@@ -498,6 +501,11 @@ proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; i
   let conf = g.config
   when defined(nimsuggest):
     if conf.suggestVersion == 0:
+      if contains($s, "isMinimal"):
+        dbg "------------"
+        dbg "syggestSym > " & $s & ":" & $info.line & ":" & $info.col
+        # printStackTrace()
+        dbg "------------"
       if s.allUsages.len == 0:
         s.allUsages = @[info]
       else:

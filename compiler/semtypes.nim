@@ -790,6 +790,7 @@ proc semRecordNodeAux(c: PContext, n: PNode, check: var IntSet, pos: var int,
                      else: rectype.sym
     for i in 0..<n.len-2:
       var f = semIdentWithPragma(c, skField, n[i], {sfExported})
+      dbg ">>>> semRecordNodeAux >  semIdentWithPragma > " & $f
       let info = if n[i].kind == nkPostfix:
                    n[i][1].info
                  else:
@@ -806,8 +807,14 @@ proc semRecordNodeAux(c: PContext, n: PNode, check: var IntSet, pos: var int,
       inc(pos)
       if containsOrIncl(check, f.name.id):
         localError(c.config, info, "attempt to redefine: '" & f.name.s & "'")
-      if a.kind == nkEmpty: father.add newSymNode(f)
-      else: a.add newSymNode(f)
+      if a.kind == nkEmpty:
+        dbg "father>>>>>>>>>>> " & $father
+        dbg "father>>>>>>>>>>> kind = " & $father.kind
+        dbg "father>>>>>>>>>>> id = " & $father.id
+        father.add newSymNode(f)
+      else:
+        dbg "a>>>>>>>>>>> " & $a
+        a.add newSymNode(f)
       styleCheckDef(c.config, f)
       onDef(f.info, f)
     if a.kind != nkEmpty: father.add a
