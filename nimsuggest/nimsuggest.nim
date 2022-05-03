@@ -151,6 +151,11 @@ proc listEpc(): SexpNode =
 
 proc findNode(n: PNode; trackPos: TLineInfo): PSym =
   #echo "checking node ", n.info
+  if not n.typ.isNil and not n.typ.n.isNil:
+    for nn in n.typ.n:
+      if nn.kind == nkSym:
+        if isTracked(nn.info, trackPos, nn.sym.name.s.len): return nn.sym
+
   if n.kind == nkSym:
     if isTracked(n.info, trackPos, n.sym.name.s.len): return n.sym
   else:
