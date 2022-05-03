@@ -456,10 +456,23 @@ when defined(nimsuggest):
   proc addNoDup(s: PSym; info: TLineInfo) =
     # ensure nothing gets too slow:
     if s.allUsages.len > 500: return
+    if contains($s, "isMinimal"):
+      dbg "------------------------"
+      dbg "addNoDup -> " & $s
     let infoAsInt = info.infoToInt
+    if contains($s, "isMinimal"):
+      dbg "addNoDup -> " & $s & "len = " & $s.allUsages.len & ";;" & $s.info.line & ":" & $s.info.col
     for infoB in s.allUsages:
-      if infoB.infoToInt == infoAsInt: return
+      if infoB.infoToInt == infoAsInt:
+        if contains($s, "isMinimal"):
+          dbg "addNoDup - already there"
+          dbg "------------------------"
+        return
     s.allUsages.add(info)
+    if contains($s, "isMinimal"):
+      dbg "addNoDup -> " & $s & "len = " & $s.allUsages.len & ";;" & $s.info.line & ":" & $s.info.col
+      dbg "------------------------"
+
 
 proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
   if g.config.suggestVersion == 1:
@@ -473,7 +486,8 @@ proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
 
 when defined(nimsuggest):
   proc listUsages*(g: ModuleGraph; s: PSym) =
-    #echo "usages ", s.allUsages.len
+    dbg "usages for " & $s & ":" & $s.allUsages.len
+
     for info in s.allUsages:
       let x = if info == s.info and info.col == s.info.col: ideDef else: ideUse
       suggestResult(g.config, symToSuggest(g, s, isLocal=false, x, info, 100, PrefixMatch.None, false, 0))

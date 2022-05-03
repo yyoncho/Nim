@@ -1,22 +1,11 @@
-# basic tests for use
-
-# bug #58
-proc someOtherProc() =
-  discard
-
-someOtherProc()
-
-proc #[!]#someProc*() =
-  discard
-
-#[!]#someProc()
+# Test def with type definition in separate file
 
 discard """
-$nimsuggest --tester $file
->use $1
-def;;skProc;;tuse.someProc;;proc (){.noSideEffect, gcsafe, locks: 0.};;$file;;9;;5;;"";;100
-use;;skProc;;tuse.someProc;;proc (){.noSideEffect, gcsafe, locks: 0.};;$file;;12;;0;;"";;100
->use $2
-def;;skProc;;tuse.someProc;;proc (){.noSideEffect, gcsafe, locks: 0.};;$file;;9;;5;;"";;100
-use;;skProc;;tuse.someProc;;proc (){.noSideEffect, gcsafe, locks: 0.};;$file;;12;;0;;"";;100
+$nimsuggest --tester /home/yyoncho/Sources/nim/Nim/nimsuggest/tests/fixtures/nimble.nim
+>def $path/fixtures/nimble.nim:4:16
+def	skField	packageinfotypes.PackageInfo.isMinimal	string	*nimsuggest/tests/fixtures/packageinfotypes.nim	3	4	""	100
+>def $path/fixtures/packageinfotypes.nim:3:4
+def	skField	packageinfotypes.PackageInfo.isMinimal		*nimsuggest/tests/fixtures/packageinfotypes.nim	3	4	""	100
+>def $path/fixtures/nimble.nim:4:15
+def	skField	packageinfotypes.PackageInfo.isMinimal	string	*nimsuggest/tests/fixtures/packageinfotypes.nim	3	4	""	100
 """
