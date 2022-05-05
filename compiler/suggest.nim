@@ -514,10 +514,12 @@ proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; i
   when defined(nimsuggest):
     if conf.suggestVersion == 0:
       if s.allUsages.len == 0:
-        if contains($s, "isMinimal"):
+        if contains($s, "errorMessage"):
           dbg "suggestSym(reset) -> " & $s
         s.allUsages = @[info]
       else:
+        if contains($s, "errorMessage"):
+          dbg "suggestSym(adding) -> " & $s
         s.addNoDup(info)
 
     if conf.ideCmd == ideUse:

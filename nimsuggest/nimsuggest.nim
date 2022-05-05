@@ -171,7 +171,7 @@ proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   let conf = graph.config
-  myLog("cmd: " & $cmd & ", file: " & file.string &
+  myLog("cmd: "  & $cmd & ", suggestVersion: " & $conf.suggestVersion & ", file: " & file.string &
         ", dirtyFile: " & dirtyfile.string &
         "[" & $line & ":" & $col & "]")
   conf.ideCmd = cmd
@@ -179,6 +179,8 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
     graph.resetAllModules()
   var isKnownFile = true
   let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+
+  myLog("file: " & dirtyFile.string & ", isKnownFile = " & $isKnownFile)
 
   if not dirtyfile.isEmpty: msgs.setDirtyFile(conf, dirtyIdx, dirtyfile)
   else: msgs.setDirtyFile(conf, dirtyIdx, AbsoluteFile"")
@@ -192,7 +194,7 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
     graph.compileProject(dirtyIdx)
   if conf.suggestVersion == 0 and conf.ideCmd in {ideUse, ideDus} and
       dirtyfile.isEmpty:
-    discard "no need to recompile anything"
+    myLog "no need to recompile anything"
   else:
     let modIdx = graph.parentModule(dirtyIdx)
     graph.markDirty dirtyIdx
@@ -201,12 +203,15 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
       if isKnownFile:
         graph.compileProject(modIdx)
   if conf.ideCmd in {ideUse, ideDus}:
+    if graph.hasDirtyModules():
+      myLog "Compiling "
+      graph.compileProject(conf.projectMainIdx)
     let u = if conf.suggestVersion != 1: graph.symFromInfo(conf.m.trackPos) else: graph.usageSym
     if u != nil:
-      myLog "Symbol" & $u & "found"
+      myLog "Symbol " & $u & "found"
       listUsages(graph, u)
     else:
-      myLog "Symbol" & $u & "not found"
+      myLog "Symbol " & $u & "not found"
       localError(conf, conf.m.trackPos, "found no symbol at this position " & (conf $ conf.m.trackPos))
 
 proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;

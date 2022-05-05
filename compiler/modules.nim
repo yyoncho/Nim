@@ -160,6 +160,8 @@ proc wantMainModule*(conf: ConfigRef) =
     fatal(conf, gCmdLineInfo, "command expects a filename")
   conf.projectMainIdx = fileInfoIdx(conf, addFileExt(conf.projectFull, NimExt))
 
+import renderer
+
 proc compileProject*(graph: ModuleGraph; projectFileIdx = InvalidFileIdx) =
   connectCallbacks(graph)
   let conf = graph.config
@@ -168,11 +170,15 @@ proc compileProject*(graph: ModuleGraph; projectFileIdx = InvalidFileIdx) =
 
   let systemFileIdx = fileInfoIdx(conf, conf.libpath / RelativeFile"system.nim")
   let projectFile = if projectFileIdx == InvalidFileIdx: conf.projectMainIdx else: projectFileIdx
+  # let projectFile = conf.projectMainIdx
   conf.projectMainIdx2 = projectFile
 
   let packSym = getPackage(graph, projectFile)
   graph.config.mainPackageId = packSym.getnimblePkgId
   graph.importStack.add projectFile
+
+  let filename = AbsoluteFile toFullPath(graph.config, projectFile)
+  dbg "fileName ==== " & $filename
 
   if projectFile == systemFileIdx:
     discard graph.compileModule(projectFile, {sfMainModule, sfSystemModule})

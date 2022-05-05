@@ -549,6 +549,8 @@ proc transitiveClosure(g: var IntSet; n: int) =
           if g.contains(i.dependsOn(k)) and g.contains(k.dependsOn(j)):
             g.incl i.dependsOn(j)
 
+import renderer
+
 proc markDirty*(g: ModuleGraph; fileIdx: FileIndex) =
   let m = g.getModule fileIdx
   if m != nil: incl m.flags, sfDirty
@@ -565,10 +567,21 @@ proc markClientsDirty*(g: ModuleGraph; fileIdx: FileIndex) =
   for i in 0i32..<g.ifaces.len.int32:
     let m = g.ifaces[i].module
     if m != nil and g.deps.contains(i.dependsOn(fileIdx.int)):
+      dbg "markClientsDirty -> " & $m
       incl m.flags, sfDirty
+
+proc hasDirtyModules*(g: ModuleGraph): bool =
+  # every module that *depends* on this file is also dirty:
+  for i in 0i32..<g.ifaces.len.int32:
+    let m = g.ifaces[i].module
+    if m != nil:
+      if sfDirty in m.flags:
+        return true
+  return false
 
 proc isDirty*(g: ModuleGraph; m: PSym): bool =
   result = g.suggestMode and sfDirty in m.flags
+  dbg "isDirty = " & $result & ", module = " & $m
 
 proc getBody*(g: ModuleGraph; s: PSym): PNode {.inline.} =
   result = s.ast[bodyPos]
