@@ -95,6 +95,16 @@ proc myLog(s: string) =
   dbg s
   # if gLogging: log(s)
 
+proc partiallyCompile(graph: ModuleGraph, index: FileIndex) =
+  myLog "recompiling full project"
+  graph.resetForBackend()
+  graph.resetSystemArtifacts()
+  graph.vm = nil
+  GC_fullCollect()
+  graph.resetAllModules()
+  graph.compileProject()
+  myLog fmt "Recompilation finished with the following GC stats {GC_getStatistics()}"
+
 proc recompileFullProject(graph: ModuleGraph) =
   myLog "recompiling full project"
   graph.resetForBackend()
