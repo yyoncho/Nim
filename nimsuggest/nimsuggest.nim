@@ -91,11 +91,6 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     line: toLinenumber(info), column: toColumn(info), doc: msg,
     forth: $sev))
 
-proc errorHookCaching(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
-  let suggest = Suggest(section: ideChk, filePath: toFullPath(conf, info),
-    line: toLinenumber(info), column: toColumn(info), doc: msg,
-    forth: $sev)
-
 proc myLog(s: string) =
   dbg s
   # if gLogging: log(s)
@@ -288,6 +283,14 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
 proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   graph.config.writelnHook = proc (s: string) = discard
+  graph.config.structuredErrorHook = errorHook
+  # graph.config.errorHook = proc (conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
+  #   let suggest = Suggest(section: ideChk, filePath: toFullPath(conf, info),
+  #     line: toLinenumber(info), column: toColumn(info), doc: msg,
+  #     forth: $sev)
+  #   graph.suggestErrors.add suggest
+
+
   executeNoHooks(cmd, file, dirtyfile, line, col, graph)
 
 proc executeEpc(cmd: IdeCmd, args: SexpNode;
@@ -578,8 +581,6 @@ proc mainThread(graph: ModuleGraph) =
       conf.ideCmd = ideChk
       conf.writelnHook = proc (s: string) = discard
       cachedMsgs.setLen 0
-      conf.structuredErrorHook = proc (conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
-        cachedMsgs.add(CachedMsg(info: info, msg: msg, sev: sev))
       conf.suggestionResultHook = proc (s: Suggest) = discard
       recompileFullProject(graph)
 

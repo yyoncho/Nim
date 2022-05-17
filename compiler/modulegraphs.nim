@@ -85,7 +85,7 @@ type
     usageSym*: PSym # for nimsuggest
     owners*: seq[PSym]
     suggestSymbols*: seq[tuple[sym: PSym, info: TLineInfo]]
-    suggestErrors*: seq[tuple[sym: PSym, info: TLineInfo]]
+    suggestErrors*: seq[Suggest]
     methods*: seq[tuple[methods: seq[PSym], dispatcher: PSym]] # needs serialization!
     systemModule*: PSym
     sysTypes*: array[TTypeKind, PType]
