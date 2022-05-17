@@ -227,11 +227,8 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
   of ideRecompile:
     graph.recompileFullProject()
   of ideChk:
-    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let trackPos = newLineInfo(dirtyIdx, line, col)
-    let symData = graph.findSymbol(trackPos)
-    if symData.sym != nil:
-      graph.listUsages(symData.sym)
+    for sug in graph.suggestErrors:
+      suggestResult(graph.config, sug)
   of ideGlobalSymbols:
     var counter = 0
     let reg = re(string(file))
@@ -283,13 +280,11 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
 proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   graph.config.writelnHook = proc (s: string) = discard
-  graph.config.structuredErrorHook = errorHook
-  # graph.config.errorHook = proc (conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
-  #   let suggest = Suggest(section: ideChk, filePath: toFullPath(conf, info),
-  #     line: toLinenumber(info), column: toColumn(info), doc: msg,
-  #     forth: $sev)
-  #   graph.suggestErrors.add suggest
-
+  graph.config.structuredErrorHook = proc (conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
+    let suggest = Suggest(section: ideChk, filePath: toFullPath(conf, info),
+      line: toLinenumber(info), column: toColumn(info), doc: msg,
+      forth: $sev)
+    graph.suggestErrors.add suggest
 
   executeNoHooks(cmd, file, dirtyfile, line, col, graph)
 
