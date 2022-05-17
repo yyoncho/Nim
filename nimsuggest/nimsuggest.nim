@@ -8,7 +8,9 @@
 #
 
 import compiler/renderer
-
+import strformat
+import tables
+import re
 ## Nimsuggest is a tool that helps to give editors IDE like capabilities.
 
 when not defined(nimcore):
@@ -89,9 +91,24 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     line: toLinenumber(info), column: toColumn(info), doc: msg,
     forth: $sev))
 
+proc errorHookCaching(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
+  let suggest = Suggest(section: ideChk, filePath: toFullPath(conf, info),
+    line: toLinenumber(info), column: toColumn(info), doc: msg,
+    forth: $sev)
+
 proc myLog(s: string) =
   dbg s
   # if gLogging: log(s)
+
+proc recompileFullProject(graph: ModuleGraph) =
+  myLog "recompiling full project"
+  graph.resetForBackend()
+  graph.resetSystemArtifacts()
+  graph.vm = nil
+  GC_fullCollect()
+  graph.resetAllModules()
+  graph.compileProject()
+  myLog fmt "Recompilation finished with the following GC stats {GC_getStatistics()}"
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -140,7 +157,7 @@ proc listEpc(): SexpNode =
     argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
     docstring = sexp("line starts at 1, column at 0, dirtyfile is optional")
   result = newSList()
-  for command in ["sug", "con", "def", "use", "dus", "chk", "mod"]:
+  for command in ["sug", "con", "def", "use", "dus", "chk", "mod", "globalSymbols", "recompile"]:
     let
       cmd = sexp(command)
       methodDesc = newSList()
@@ -150,12 +167,6 @@ proc listEpc(): SexpNode =
     result.add(methodDesc)
 
 proc findNode(n: PNode; trackPos: TLineInfo): PSym =
-  #echo "checking node ", n.info
-  if not n.typ.isNil and not n.typ.n.isNil:
-    for nn in n.typ.n:
-      if nn.kind == nkSym:
-        if isTracked(nn.info, trackPos, nn.sym.name.s.len): return nn.sym
-
   if n.kind == nkSym:
     if isTracked(n.info, trackPos, n.sym.name.s.len): return n.sym
   else:
@@ -164,64 +175,119 @@ proc findNode(n: PNode; trackPos: TLineInfo): PSym =
       if res != nil: return res
 
 proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
-  let m = graph.getModule(trackPos.fileIndex)
-  if m != nil and m.ast != nil:
-    result = findNode(m.ast, trackPos)
+  for (sym, info) in graph.suggestSymbols:
+    if isTracked(info, trackPos, sym.name.s.len):
+      suggestResult(graph.config, symToSuggest(graph, sym, isLocal=false, ideDef, info, 100, PrefixMatch.None, false, 0))
+
+proc findSymbol (graph: ModuleGraph, trackPos: TLineInfo): tuple[sym: PSym, info: TLineInfo] =
+  for (sym, info) in graph.suggestSymbols:
+    if isTracked(info, trackPos, sym.name.s.len):
+      return (sym, info)
+
+proc usages(g: ModuleGraph; s: PSym) =
+  for info in s.allUsages:
+    let
+      section = if info == s.info and info.col == s.info.col: ideDef else: ideUse
+      suggest = symToSuggest(g, s, isLocal=false, section, info, 100, PrefixMatch.None, false, 0)
+    suggestResult(g.config, suggest)
+
+proc usagesInCurrentFile(g: ModuleGraph, s: PSym, fileIndex: FileIndex) =
+  for info in s.allUsages:
+    if info.fileIndex == fileIndex:
+      let
+        section = if info == s.info and info.col == s.info.col: ideDef else: ideUse
+        suggest = symToSuggest(g, s, isLocal=false, section, info, 100, PrefixMatch.None, false, 0)
+      suggestResult(g.config, suggest)
 
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
+  var isKnownFile = true
   let conf = graph.config
+  conf.ideCmd = cmd
+
   myLog("cmd: "  & $cmd & ", suggestVersion: " & $conf.suggestVersion & ", file: " & file.string &
         ", dirtyFile: " & dirtyfile.string &
         "[" & $line & ":" & $col & "]")
-  conf.ideCmd = cmd
-  if cmd == ideUse and conf.suggestVersion != 0:
-    graph.resetAllModules()
-  var isKnownFile = true
-  let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-
-  myLog("file: " & dirtyFile.string & ", isKnownFile = " & $isKnownFile)
-
-  if not dirtyfile.isEmpty: msgs.setDirtyFile(conf, dirtyIdx, dirtyfile)
-  else: msgs.setDirtyFile(conf, dirtyIdx, AbsoluteFile"")
-
-  conf.m.trackPos = newLineInfo(dirtyIdx, line, col)
-  conf.m.trackPosAttached = false
-  conf.errorCounter = 0
-  if conf.suggestVersion == 1:
-    graph.usageSym = nil
-  if not isKnownFile:
-    graph.compileProject(dirtyIdx)
-  if conf.suggestVersion == 0 and conf.ideCmd in {ideUse, ideDus} and
-      dirtyfile.isEmpty:
-    myLog "no need to recompile anything"
+  case cmd
+  of ideDef:
+    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+    let trackPos = newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymbol(trackPos)
+    if symData.sym != nil:
+      suggestResult(conf,
+                    symToSuggest(graph, symData.sym, isLocal=false,
+                                 ideDef, symData.info, 100, PrefixMatch.None, false, 0))
+  of ideUse, ideDus:
+    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+    let trackPos = newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymbol(trackPos)
+    if symData.sym != nil:
+      graph.usages(symData.sym)
+  of ideHighlight:
+    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+    let trackPos = newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymbol(trackPos)
+    if symData.sym != nil:
+      graph.usagesInCurrentFile(symData.sym, dirtyIdx)
+  of ideRecompile:
+    graph.recompileFullProject()
+  of ideChk:
+    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+    let trackPos = newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymbol(trackPos)
+    if symData.sym != nil:
+      graph.listUsages(symData.sym)
+  of ideGlobalSymbols:
+    var counter = 0
+    let reg = re(string(file))
+    for (sym, info) in graph.suggestSymbols:
+      if sfGlobal in sym.flags:
+        if find(cstring(sym.name.s), reg, 0, sym.name.s.len) != -1:
+          inc counter
+          suggestResult(conf,
+                        symToSuggest(graph, sym, isLocal=false,
+                                     ideDef, info, 100, PrefixMatch.None, false, 0))
+        # stop after first 100 results
+        if counter > 100:
+          break
   else:
-    let modIdx = graph.parentModule(dirtyIdx)
-    graph.markDirty dirtyIdx
-    graph.markClientsDirty dirtyIdx
-    if conf.ideCmd != ideMod:
-      if isKnownFile:
-        graph.compileProject(modIdx)
-  if conf.ideCmd in {ideUse, ideDus}:
-    if graph.hasDirtyModules():
-      myLog "Compiling "
-      graph.compileProject(conf.projectMainIdx)
-    let u = if conf.suggestVersion != 1: graph.symFromInfo(conf.m.trackPos) else: graph.usageSym
-    if u != nil:
-      myLog "Symbol " & $u & "found"
-      listUsages(graph, u)
+    # if not dirtyfile.isEmpty: msgs.setDirtyFile(conf, dirtyIdx, dirtyfile)
+    # else: msgs.setDirtyFile(conf, dirtyIdx, AbsoluteFile"")
+
+    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+    let trackPos = newLineInfo(dirtyIdx, line, col)
+    conf.m.trackPos = trackPos
+    conf.m.trackPosAttached = false
+    conf.errorCounter = 0
+    if conf.suggestVersion == 1:
+      graph.usageSym = nil
+    # if not isKnownFile:
+    #   graph.compileProject(dirtyIdx)
+    if conf.suggestVersion == 0 and conf.ideCmd in {ideUse, ideDus} and
+        dirtyfile.isEmpty:
+      myLog "no need to recompile anything"
     else:
-      myLog "Symbol " & $u & "not found"
-      localError(conf, conf.m.trackPos, "found no symbol at this position " & (conf $ conf.m.trackPos))
+      let modIdx = graph.parentModule(dirtyIdx)
+      # graph.markDirty dirtyIdx
+      # graph.markClientsDirty dirtyIdx
+      # if conf.ideCmd != ideMod:
+      #   if isKnownFile:
+      #     graph.compileProject(modIdx)
+    if conf.ideCmd in {ideUse, ideDus}:
+      # if graph.hasDirtyModules():
+      #   myLog "Compiling "
+      #   graph.compileProject(conf.projectMainIdx)
+      let u = if conf.suggestVersion != 1: graph.symFromInfo(conf.m.trackPos) else: graph.usageSym
+      if u != nil:
+        myLog "Symbol " & $u & " found"
+        listUsages(graph, u)
+      else:
+        myLog "Symbol " & $u & " not found"
+        localError(conf, conf.m.trackPos, "found no symbol at this position " & (conf $ conf.m.trackPos))
 
 proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
-  if cmd == ideChk:
-    graph.config.structuredErrorHook = errorHook
-    graph.config.writelnHook = myLog
-  else:
-    graph.config.structuredErrorHook = nil
-    graph.config.writelnHook = myLog
+  graph.config.writelnHook = proc (s: string) = discard
   executeNoHooks(cmd, file, dirtyfile, line, col, graph)
 
 proc executeEpc(cmd: IdeCmd, args: SexpNode;
@@ -441,8 +507,10 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
   of "use": conf.ideCmd = ideUse
   of "dus": conf.ideCmd = ideDus
   of "mod": conf.ideCmd = ideMod
+  of "globalsymbols": conf.ideCmd = ideGlobalSymbols
   of "chk": conf.ideCmd = ideChk
   of "highlight": conf.ideCmd = ideHighlight
+  of "recompile": conf.ideCmd = ideRecompile
   of "outline": conf.ideCmd = ideOutline
   of "quit":
     sentinel()
@@ -477,15 +545,6 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
       for cm in cachedMsgs: errorHook(conf, cm.info, cm.msg, cm.sev)
     execute(conf.ideCmd, AbsoluteFile orig, AbsoluteFile dirtyfile, line, col, graph)
   sentinel()
-
-proc recompileFullProject(graph: ModuleGraph) =
-  #echo "recompiling full project"
-  resetSystemArtifacts(graph)
-  graph.vm = nil
-  graph.resetAllModules()
-  GC_fullCollect()
-  compileProject(graph)
-  #echo GC_getStatistics()
 
 proc mainThread(graph: ModuleGraph) =
   let conf = graph.config
@@ -542,7 +601,7 @@ proc mainCommand(graph: ModuleGraph) =
 
   conf.setErrorMaxHighMaybe # honor --errorMax even if it may not make sense here
   # do not print errors, but log them
-  conf.writelnHook = myLog
+  conf.writelnHook = proc (msg: string) = discard
   conf.structuredErrorHook = nil
 
   # compile the project before showing any input so that we already
@@ -666,6 +725,7 @@ when isMainModule:
   handleCmdLine(newIdentCache(), newConfigRef())
 else:
   export Suggest
+
   export IdeCmd
   export AbsoluteFile
   type NimSuggest* = ref object

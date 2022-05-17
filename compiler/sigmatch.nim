@@ -959,7 +959,7 @@ when false:
 
 template skipOwned(a) =
   if a.kind == tyOwned: a = a.skipTypes({tyOwned, tyGenericInst})
-
+import strformat
 proc typeRel(c: var TCandidate, f, aOrig: PType,
              flags: TTypeRelFlags = {}): TTypeRelation =
   # typeRel can be used to establish various relationships between types:
@@ -1640,7 +1640,7 @@ proc typeRel(c: var TCandidate, f, aOrig: PType,
         elif a.len > 0 and a.lastSon == f:
           # Needed for checking `Y` == `Addable` in the following
           #[
-            type 
+            type
               Addable = concept a, type A
                 a + a is A
               MyType[T: Addable; Y: static T] = object
@@ -2634,6 +2634,7 @@ proc argtypeMatches*(c: PContext, f, a: PType, fromHlo = false): bool =
 when not defined(nimHasSinkInference):
   {.pragma: nosinks.}
 
+import strformat
 proc instTypeBoundOp*(c: PContext; dc: PSym; t: PType; info: TLineInfo;
                       op: TTypeAttachedOp; col: int): PSym {.nosinks.} =
   var m = newCandidate(c, dc.typ)

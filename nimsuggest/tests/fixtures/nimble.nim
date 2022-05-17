@@ -1,4 +1,7 @@
 import packageinfotypes
+import options
 
-proc validatePackageStructure(pkgInfo: PackageInfo) =
-  echo pkgInfo.isMinimal
+proc a(nnnnnnnnn: Option[PackageInfo]) =
+  echo nnnnnnnnn.get.isMinimal
+  let b = nnnnnnnnn.get.isMinimal
+  echo b

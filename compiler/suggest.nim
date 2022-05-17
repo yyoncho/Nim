@@ -117,7 +117,7 @@ proc getTokenLenFromSource(conf: ConfigRef; ident: string; info: TLineInfo): int
     elif sourceIdent != ident:
       result = 0
 
-proc symToSuggest(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info: TLineInfo;
+proc symToSuggest*(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info: TLineInfo;
                   quality: range[0..100]; prefix: PrefixMatch;
                   inTypeContext: bool; scope: int;
                   useSuppliedInfo = false): Suggest =
@@ -210,7 +210,7 @@ proc `$`*(suggest: Suggest): string =
         result.add(sep)
         result.add($suggest.prefix)
 
-proc suggestResult(conf: ConfigRef; s: Suggest) =
+proc suggestResult*(conf: ConfigRef; s: Suggest) =
   if not isNil(conf.suggestionResultHook):
     conf.suggestionResultHook(s)
   else:
@@ -456,23 +456,11 @@ when defined(nimsuggest):
   proc addNoDup(s: PSym; info: TLineInfo) =
     # ensure nothing gets too slow:
     if s.allUsages.len > 500: return
-    if contains($s, "isMinimal"):
-      dbg "------------------------"
-      dbg "addNoDup -> " & $s
     let infoAsInt = info.infoToInt
-    if contains($s, "isMinimal"):
-      dbg "addNoDup -> " & $s & "len = " & $s.allUsages.len & ";;" & $s.info.line & ":" & $s.info.col
     for infoB in s.allUsages:
       if infoB.infoToInt == infoAsInt:
-        if contains($s, "isMinimal"):
-          dbg "addNoDup - already there"
-          dbg "------------------------"
         return
     s.allUsages.add(info)
-    if contains($s, "isMinimal"):
-      dbg "addNoDup -> " & $s & "len = " & $s.allUsages.len & ";;" & $s.info.line & ":" & $s.info.col
-      dbg "------------------------"
-
 
 proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
   if g.config.suggestVersion == 1:
@@ -486,8 +474,6 @@ proc findUsages(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym) =
 
 when defined(nimsuggest):
   proc listUsages*(g: ModuleGraph; s: PSym) =
-    dbg "usages for " & $s & ":" & $s.allUsages.len
-
     for info in s.allUsages:
       let x = if info == s.info and info.col == s.info.col: ideDef else: ideUse
       suggestResult(g.config, symToSuggest(g, s, isLocal=false, x, info, 100, PrefixMatch.None, false, 0))
@@ -508,18 +494,17 @@ proc ensureIdx[T](x: var T, y: int) =
 proc ensureSeq[T](x: var seq[T]) =
   if x == nil: newSeq(x, 0)
 
+import strformat
+
 proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; isDecl=true) {.inline.} =
   ## misnamed: should be 'symDeclared'
   let conf = g.config
   when defined(nimsuggest):
+    g.suggestSymbols.add (s, info)
     if conf.suggestVersion == 0:
       if s.allUsages.len == 0:
-        if contains($s, "errorMessage"):
-          dbg "suggestSym(reset) -> " & $s
         s.allUsages = @[info]
       else:
-        if contains($s, "errorMessage"):
-          dbg "suggestSym(adding) -> " & $s
         s.addNoDup(info)
 
     if conf.ideCmd == ideUse:

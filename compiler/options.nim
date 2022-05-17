@@ -190,7 +190,7 @@ type
 
   IdeCmd* = enum
     ideNone, ideSug, ideCon, ideDef, ideUse, ideDus, ideChk, ideMod,
-    ideHighlight, ideOutline, ideKnown, ideMsg, ideProject
+    ideHighlight, ideOutline, ideKnown, ideMsg, ideProject, ideGlobalSymbols, ideRecompile
 
   Feature* = enum  ## experimental features; DO NOT RENAME THESE!
     implicitDeref,
@@ -1003,6 +1003,8 @@ proc parseIdeCmd*(s: string): IdeCmd =
   of "known": ideKnown
   of "msg": ideMsg
   of "project": ideProject
+  of "globalSymbols": ideGlobalSymbols
+  of "recompile": ideRecompile
   else: ideNone
 
 proc `$`*(c: IdeCmd): string =
@@ -1020,6 +1022,8 @@ proc `$`*(c: IdeCmd): string =
   of ideKnown: "known"
   of ideMsg: "msg"
   of ideProject: "project"
+  of ideGlobalSymbols: "globalSymbols"
+  of ideRecompile: "recompile"
 
 proc floatInt64Align*(conf: ConfigRef): int16 =
   ## Returns either 4 or 8 depending on reasons.

@@ -145,8 +145,8 @@ proc instantiateBody(c: PContext, n, params: PNode, result, orig: PSym) =
         if sfGenSym in param.flags:
           idTablePut(symMap, params[i].sym, result.typ.n[param.position+1].sym)
     freshGenSyms(c, b, result, orig, symMap)
-    
-    if sfBorrow notin orig.flags: 
+
+    if sfBorrow notin orig.flags:
       # We do not want to generate a body for generic borrowed procs.
       # As body is a sym to the borrowed proc.
       b = semProcBody(c, b)
@@ -330,7 +330,7 @@ proc fillMixinScope(c: PContext) =
       for n in bnd:
         addSym(c.currentScope, n.sym)
     p = p.next
-
+import strformat
 proc generateInstance(c: PContext, fn: PSym, pt: TIdTable,
                       info: TLineInfo): PSym {.nosinks.} =
   ## Generates a new instance of a generic procedure.

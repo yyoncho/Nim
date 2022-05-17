@@ -178,7 +178,6 @@ proc compileProject*(graph: ModuleGraph; projectFileIdx = InvalidFileIdx) =
   graph.importStack.add projectFile
 
   let filename = AbsoluteFile toFullPath(graph.config, projectFile)
-  dbg "fileName ==== " & $filename
 
   if projectFile == systemFileIdx:
     discard graph.compileModule(projectFile, {sfMainModule, sfSystemModule})

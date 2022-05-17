@@ -84,6 +84,8 @@ type
     doStopCompile*: proc(): bool {.closure.}
     usageSym*: PSym # for nimsuggest
     owners*: seq[PSym]
+    suggestSymbols*: seq[tuple[sym: PSym, info: TLineInfo]]
+    suggestErrors*: seq[tuple[sym: PSym, info: TLineInfo]]
     methods*: seq[tuple[methods: seq[PSym], dispatcher: PSym]] # needs serialization!
     systemModule*: PSym
     sysTypes*: array[TTypeKind, PType]
@@ -296,6 +298,9 @@ proc getAttachedOp*(g: ModuleGraph; t: PType; op: TTypeAttachedOp): PSym =
   ## returns the requested attached operation for type `t`. Can return nil
   ## if no such operation exists.
   result = g.attachedOps[op].getOrDefault(t.itemId)
+import strformat
+import strutils
+import renderer
 
 proc setAttachedOp*(g: ModuleGraph; module: int; t: PType; op: TTypeAttachedOp; value: PSym) =
   ## we also need to record this to the packed module.
@@ -386,9 +391,18 @@ when defined(nimfind):
       c.graph.onDefinitionResolveForward(c.graph, s, info)
 
 else:
-  template onUse*(info: TLineInfo; s: PSym) = discard
-  template onDef*(info: TLineInfo; s: PSym) = discard
-  template onDefResolveForward*(info: TLineInfo; s: PSym) = discard
+  when defined(nimsuggest):
+    template onUse*(info: TLineInfo; s: PSym) = discard
+
+    template onDef*(info: TLineInfo; s: PSym) =
+      let c = getPContext()
+      suggestSym(c.graph, info, s, c.graph.usageSym)
+
+    template onDefResolveForward*(info: TLineInfo; s: PSym) = discard
+  else:
+    template onUse*(info: TLineInfo; s: PSym) = discard
+    template onDef*(info: TLineInfo; s: PSym) = discard
+    template onDefResolveForward*(info: TLineInfo; s: PSym) = discard
 
 proc stopCompile*(g: ModuleGraph): bool {.inline.} =
   result = g.doStopCompile != nil and g.doStopCompile()
@@ -435,10 +449,7 @@ proc initOperators*(g: ModuleGraph): Operators =
   result.opNot = createMagic(g, "not", mNot)
   result.opContains = createMagic(g, "contains", mInSet)
 
-proc newModuleGraph*(cache: IdentCache; config: ConfigRef): ModuleGraph =
-  result = ModuleGraph()
-  # A module ID of -1 means that the symbol is not attached to a module at all,
-  # but to the module graph:
+proc initModuleGraphFields(result: ModuleGraph) =
   result.idgen = IdGenerator(module: -1'i32, symId: 0'i32, typeId: 0'i32)
   initStrTable(result.packageSyms)
   result.deps = initIntSet()
@@ -446,9 +457,9 @@ proc newModuleGraph*(cache: IdentCache; config: ConfigRef): ModuleGraph =
   result.ifaces = @[]
   result.importStack = @[]
   result.inclToMod = initTable[FileIndex, FileIndex]()
-  result.config = config
-  result.cache = cache
   result.owners = @[]
+  result.suggestSymbols = @[]
+  result.suggestErrors = @[]
   result.methods = @[]
   initStrTable(result.compilerprocs)
   initStrTable(result.exposed)
@@ -462,6 +473,14 @@ proc newModuleGraph*(cache: IdentCache; config: ConfigRef): ModuleGraph =
   result.operators = initOperators(result)
   result.emittedTypeInfo = initTable[string, FileIndex]()
 
+proc newModuleGraph*(cache: IdentCache; config: ConfigRef): ModuleGraph =
+  result = ModuleGraph()
+  result.config = config
+  result.cache = cache
+  initModuleGraphFields(result)
+  # A module ID of -1 means that the symbol is not attached to a module at all,
+  # but to the module graph:
+
 proc resetAllModules*(g: ModuleGraph) =
   initStrTable(g.packageSyms)
   g.deps = initIntSet()
@@ -473,6 +492,7 @@ proc resetAllModules*(g: ModuleGraph) =
   g.methods = @[]
   initStrTable(g.compilerprocs)
   initStrTable(g.exposed)
+  initModuleGraphFields(g)
 
 proc getModule*(g: ModuleGraph; fileIdx: FileIndex): PSym =
   if fileIdx.int32 >= 0:
@@ -567,7 +587,6 @@ proc markClientsDirty*(g: ModuleGraph; fileIdx: FileIndex) =
   for i in 0i32..<g.ifaces.len.int32:
     let m = g.ifaces[i].module
     if m != nil and g.deps.contains(i.dependsOn(fileIdx.int)):
-      dbg "markClientsDirty -> " & $m
       incl m.flags, sfDirty
 
 proc hasDirtyModules*(g: ModuleGraph): bool =
@@ -581,7 +600,6 @@ proc hasDirtyModules*(g: ModuleGraph): bool =
 
 proc isDirty*(g: ModuleGraph; m: PSym): bool =
   result = g.suggestMode and sfDirty in m.flags
-  dbg "isDirty = " & $result & ", module = " & $m
 
 proc getBody*(g: ModuleGraph; s: PSym): PNode {.inline.} =
   result = s.ast[bodyPos]

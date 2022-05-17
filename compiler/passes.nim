@@ -122,6 +122,7 @@ proc partOfStdlib(x: PSym): bool =
 
 import renderer
 import strutils
+import strformat
 
 proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                     stream: PLLStream): bool {.discardable.} =
@@ -131,10 +132,7 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
     a: TPassContextArray
     s: PLLStream
     fileIdx = module.fileIdx
-  dbg ">..................." & $module
-  if contains($module, "nimble") or contains($module, "packageinfo"):
-    # printStackTrace()
-    discard
+  dbg ">>>> " & $module
   prepareConfigNotes(graph, module)
   openPasses(graph, a, module, idgen)
   if stream == nil:
@@ -161,6 +159,7 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
     while true:
       if graph.stopCompile(): break
       var n = parseTopLevelStmt(p)
+      # if contains($module, "nimlangserver"):
       if n.kind == nkEmpty: break
       if (sfSystemModule notin module.flags and
           ({sfNoForward, sfReorder} * module.flags != {} or
@@ -179,6 +178,7 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       elif n.kind in imperativeCode:
         # read everything until the next proc declaration etc.
         var sl = newNodeI(nkStmtList, n.info)
+
         sl.add n
         var rest: PNode = nil
         while true:
@@ -204,4 +204,4 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
     # They are responsible for closing the rod files. See `cbackend.nim`.
     closeRodFile(graph, module)
   result = true
-  dbg "<..................." & $module
+  dbg "<<<< " & $module
