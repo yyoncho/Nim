@@ -200,33 +200,29 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
   let conf = graph.config
   conf.ideCmd = cmd
 
-  myLog("cmd: "  & $cmd & ", suggestVersion: " & $conf.suggestVersion & ", file: " & file.string &
-        ", dirtyFile: " & dirtyfile.string &
-        "[" & $line & ":" & $col & "]")
+  myLog fmt "cmd: {cmd}, suggestVersion: {conf.suggestVersion}, file: {file.string}, dirtyFile: {dirtyfile.string} [${line}:{col}]"
   case cmd
   of ideDef:
     let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let trackPos = newLineInfo(dirtyIdx, line, col)
-    let symData = graph.findSymbol(trackPos)
+    let symData = graph.findSymbol newLineInfo(dirtyIdx, line, col)
     if symData.sym != nil:
       suggestResult(conf,
                     symToSuggest(graph, symData.sym, isLocal=false,
                                  ideDef, symData.info, 100, PrefixMatch.None, false, 0))
   of ideUse, ideDus:
     let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let trackPos = newLineInfo(dirtyIdx, line, col)
-    let symData = graph.findSymbol(trackPos)
+    let symData = graph.findSymbol newLineInfo(dirtyIdx, line, col)
     if symData.sym != nil:
       graph.usages(symData.sym)
   of ideHighlight:
     let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let trackPos = newLineInfo(dirtyIdx, line, col)
-    let symData = graph.findSymbol(trackPos)
+    let symData = graph.findSymbol newLineInfo(dirtyIdx, line, col)
     if symData.sym != nil:
       graph.usagesInCurrentFile(symData.sym, dirtyIdx)
   of ideRecompile:
     graph.recompileFullProject()
   of ideChk:
+    myLog fmt "Reporting {graph.suggestErrors.len} error(s)"
     for sug in graph.suggestErrors:
       suggestResult(graph.config, sug)
   of ideGlobalSymbols:
@@ -243,39 +239,13 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
         if counter > 100:
           break
   else:
-    # if not dirtyfile.isEmpty: msgs.setDirtyFile(conf, dirtyIdx, dirtyfile)
-    # else: msgs.setDirtyFile(conf, dirtyIdx, AbsoluteFile"")
-
     let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
     let trackPos = newLineInfo(dirtyIdx, line, col)
-    conf.m.trackPos = trackPos
-    conf.m.trackPosAttached = false
-    conf.errorCounter = 0
-    if conf.suggestVersion == 1:
-      graph.usageSym = nil
-    # if not isKnownFile:
-    #   graph.compileProject(dirtyIdx)
-    if conf.suggestVersion == 0 and conf.ideCmd in {ideUse, ideDus} and
-        dirtyfile.isEmpty:
-      myLog "no need to recompile anything"
-    else:
-      let modIdx = graph.parentModule(dirtyIdx)
-      # graph.markDirty dirtyIdx
-      # graph.markClientsDirty dirtyIdx
-      # if conf.ideCmd != ideMod:
-      #   if isKnownFile:
-      #     graph.compileProject(modIdx)
-    if conf.ideCmd in {ideUse, ideDus}:
-      # if graph.hasDirtyModules():
-      #   myLog "Compiling "
-      #   graph.compileProject(conf.projectMainIdx)
-      let u = if conf.suggestVersion != 1: graph.symFromInfo(conf.m.trackPos) else: graph.usageSym
-      if u != nil:
-        myLog "Symbol " & $u & " found"
-        listUsages(graph, u)
-      else:
-        myLog "Symbol " & $u & " not found"
-        localError(conf, conf.m.trackPos, "found no symbol at this position " & (conf $ conf.m.trackPos))
+    let modIdx = graph.parentModule(dirtyIdx)
+    graph.markDirty dirtyIdx
+    graph.markClientsDirty dirtyIdx
+    if isKnownFile:
+      graph.compileProject(modIdx)
 
 proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
