@@ -96,14 +96,16 @@ proc myLog(s: string) =
 
   # if gLogging: log(s)
 
-proc partiallyCompile(graph: ModuleGraph, index: FileIndex) =
-  myLog "recompiling full project"
-  graph.resetForBackend()
-  graph.resetSystemArtifacts()
-  graph.vm = nil
+proc recompilePartially(graph: ModuleGraph, projectFileIdx = InvalidFileIdx) =
+  myLog "recompiling partially"
+  graph.typeInstCache.clear()
+  graph.procInstCache.clear()
+  # graph.resetForBackend()
+  # graph.resetSystemArtifacts()
+  # graph.vm = nil
   GC_fullCollect()
-  graph.resetAllModules()
-  graph.compileProject()
+  # graph.resetAllModules()
+  graph.compileProject(projectFileIdx)
   myLog fmt "Recompilation finished with the following GC stats\n{GC_getStatistics()}"
 
 proc recompileFullProject(graph: ModuleGraph) =
@@ -182,12 +184,12 @@ proc findNode(n: PNode; trackPos: TLineInfo): PSym =
       if res != nil: return res
 
 proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
-  for (sym, info) in graph.suggestSymbols:
+  for (sym, info) in graph.suggestSymbolsIter:
     if isTracked(info, trackPos, sym.name.s.len):
       suggestResult(graph.config, symToSuggest(graph, sym, isLocal=false, ideDef, info, 100, PrefixMatch.None, false, 0))
 
 proc findSymbol (graph: ModuleGraph, trackPos: TLineInfo): tuple[sym: PSym, info: TLineInfo] =
-  for (sym, info) in graph.suggestSymbols:
+  for (sym, info) in graph.suggestSymbolsIter:
     if isTracked(info, trackPos, sym.name.s.len):
       return (sym, info)
 
@@ -217,7 +219,7 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
   if graph.hasDirtyModules():
     if cmd in {ideUse, ideDus, ideGlobalSymbols, ideChk}:
       graph.recompilePartially()
-    elif cmd in {ideSug, ideOutline, ideHighlight}:
+    elif cmd in {ideSug, ideOutline, ideHighlight, ideDef}:
       graph.recompilePartially(fileInfoIdx(conf, file, isKnownFile))
 
   case cmd
@@ -251,12 +253,12 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
     # else: graph.recompilePartially()
   of ideChk:
     myLog fmt "Reporting {graph.suggestErrors.len} error(s)"
-    for sug in graph.suggestErrors:
+    for sug in graph.suggestErrorsIter:
       suggestResult(graph.config, sug)
   of ideGlobalSymbols:
     var counter = 0
     let reg = re(string(file))
-    for (sym, info) in graph.suggestSymbols:
+    for (sym, info) in graph.suggestSymbolsIter:
       if sfGlobal in sym.flags:
         if find(cstring(sym.name.s), reg, 0, sym.name.s.len) != -1:
           inc counter
@@ -282,7 +284,7 @@ proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
     let suggest = Suggest(section: ideChk, filePath: toFullPath(conf, info),
       line: toLinenumber(info), column: toColumn(info), doc: msg,
       forth: $sev)
-    graph.suggestErrors.add suggest
+    graph.suggestErrors.mgetOrPut(info.fileIndex, @[]).add suggest
 
   executeNoHooks(cmd, file, dirtyfile, line, col, graph)
 

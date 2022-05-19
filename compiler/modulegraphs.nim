@@ -84,8 +84,8 @@ type
     doStopCompile*: proc(): bool {.closure.}
     usageSym*: PSym # for nimsuggest
     owners*: seq[PSym]
-    suggestSymbols*: seq[tuple[sym: PSym, info: TLineInfo]]
-    suggestErrors*: seq[Suggest]
+    suggestSymbols*: Table[FileIndex, seq[tuple[sym: PSym, info: TLineInfo]]]
+    suggestErrors*: Table[FileIndex, seq[Suggest]]
     methods*: seq[tuple[methods: seq[PSym], dispatcher: PSym]] # needs serialization!
     systemModule*: PSym
     sysTypes*: array[TTypeKind, PType]
@@ -449,30 +449,6 @@ proc initOperators*(g: ModuleGraph): Operators =
   result.opNot = createMagic(g, "not", mNot)
   result.opContains = createMagic(g, "contains", mInSet)
 
-proc initModuleGraphFieldsss*(result: ModuleGraph) =
-  result.idgen = IdGenerator(module: -1'i32, symId: 0'i32, typeId: 0'i32)
-  initStrTable(result.packageSyms)
-  result.deps = initIntSet()
-  result.importDeps = initTable[FileIndex, seq[FileIndex]]()
-  result.ifaces = @[]
-  result.importStack = @[]
-  result.inclToMod = initTable[FileIndex, FileIndex]()
-  result.owners = @[]
-  result.suggestSymbols = @[]
-  result.suggestErrors = @[]
-  result.methods = @[]
-  initStrTable(result.compilerprocs)
-  initStrTable(result.exposed)
-  initStrTable(result.packageTypes)
-  result.emptyNode = newNode(nkEmpty)
-  result.cacheSeqs = initTable[string, PNode]()
-  result.cacheCounters = initTable[string, BiggestInt]()
-  result.cacheTables = initTable[string, BTree[string, PNode]]()
-  result.canonTypes = initTable[SigHash, PType]()
-  result.symBodyHashes = initTable[int, SigHash]()
-  result.operators = initOperators(result)
-  result.emittedTypeInfo = initTable[string, FileIndex]()
-
 proc initModuleGraphFields(result: ModuleGraph) =
   result.idgen = IdGenerator(module: -1'i32, symId: 0'i32, typeId: 0'i32)
   initStrTable(result.packageSyms)
@@ -482,8 +458,8 @@ proc initModuleGraphFields(result: ModuleGraph) =
   result.importStack = @[]
   result.inclToMod = initTable[FileIndex, FileIndex]()
   result.owners = @[]
-  result.suggestSymbols = @[]
-  result.suggestErrors = @[]
+  result.suggestSymbols = initTable[FileIndex, seq[tuple[sym: PSym, info: TLineInfo]]]()
+  result.suggestErrors = initTable[FileIndex, seq[Suggest]]()
   result.methods = @[]
   initStrTable(result.compilerprocs)
   initStrTable(result.exposed)
@@ -613,8 +589,8 @@ proc markClientsDirty*(g: ModuleGraph; fileIdx: FileIndex) =
     if m != nil and g.deps.contains(i.dependsOn(fileIdx.int)):
       dbg fmt "markClientsDirty = {m} is now dirty"
       incl m.flags, sfDirty
-      # when defined(nimsuggest):
-      #   g.suggestSymbols = g.suggestSymbols.filterIt(it.line )
+      g.suggestSymbols.del(FileIndex(i))
+      g.suggestErrors.del(FileIndex(i))
 
 proc hasDirtyModules*(g: ModuleGraph): bool =
   # every module that *depends* on this file is also dirty:
@@ -656,3 +632,13 @@ proc onProcessing*(graph: ModuleGraph, fileIdx: FileIndex, moduleStatus: string,
     let fromModule2 = if fromModule != nil: $fromModule.name.s else: "(toplevel)"
     let mode = if isNimscript: "(nims) " else: ""
     rawMessage(conf, hintProcessing, "$#$# $#: $#: $#" % [mode, indent, fromModule2, moduleStatus, path])
+
+iterator suggestSymbolsIter*(g: ModuleGraph): tuple[sym: PSym, info: TLineInfo] =
+  for xs in g.suggestSymbols.values:
+    for x in xs:
+      yield x
+
+iterator suggestErrorsIter*(g: ModuleGraph): Suggest =
+  for xs in g.suggestErrors.values:
+    for x in xs:
+      yield x
