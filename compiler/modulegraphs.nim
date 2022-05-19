@@ -11,7 +11,7 @@
 ## represents a complete Nim project. Single modules can either be kept in RAM
 ## or stored in a rod-file.
 
-import intsets, tables, hashes, md5_old
+import intsets, tables, hashes, md5_old, sequtils, sugar
 import ast, astalgo, options, lineinfos,idents, btrees, ropes, msgs, pathutils
 import ic / [packed_ast, ic]
 
@@ -449,6 +449,30 @@ proc initOperators*(g: ModuleGraph): Operators =
   result.opNot = createMagic(g, "not", mNot)
   result.opContains = createMagic(g, "contains", mInSet)
 
+proc initModuleGraphFieldsss*(result: ModuleGraph) =
+  result.idgen = IdGenerator(module: -1'i32, symId: 0'i32, typeId: 0'i32)
+  initStrTable(result.packageSyms)
+  result.deps = initIntSet()
+  result.importDeps = initTable[FileIndex, seq[FileIndex]]()
+  result.ifaces = @[]
+  result.importStack = @[]
+  result.inclToMod = initTable[FileIndex, FileIndex]()
+  result.owners = @[]
+  result.suggestSymbols = @[]
+  result.suggestErrors = @[]
+  result.methods = @[]
+  initStrTable(result.compilerprocs)
+  initStrTable(result.exposed)
+  initStrTable(result.packageTypes)
+  result.emptyNode = newNode(nkEmpty)
+  result.cacheSeqs = initTable[string, PNode]()
+  result.cacheCounters = initTable[string, BiggestInt]()
+  result.cacheTables = initTable[string, BTree[string, PNode]]()
+  result.canonTypes = initTable[SigHash, PType]()
+  result.symBodyHashes = initTable[int, SigHash]()
+  result.operators = initOperators(result)
+  result.emittedTypeInfo = initTable[string, FileIndex]()
+
 proc initModuleGraphFields(result: ModuleGraph) =
   result.idgen = IdGenerator(module: -1'i32, symId: 0'i32, typeId: 0'i32)
   initStrTable(result.packageSyms)
@@ -587,16 +611,20 @@ proc markClientsDirty*(g: ModuleGraph; fileIdx: FileIndex) =
   for i in 0i32..<g.ifaces.len.int32:
     let m = g.ifaces[i].module
     if m != nil and g.deps.contains(i.dependsOn(fileIdx.int)):
+      dbg fmt "markClientsDirty = {m} is now dirty"
       incl m.flags, sfDirty
+      # when defined(nimsuggest):
+      #   g.suggestSymbols = g.suggestSymbols.filterIt(it.line )
 
 proc hasDirtyModules*(g: ModuleGraph): bool =
   # every module that *depends* on this file is also dirty:
+  result = false
   for i in 0i32..<g.ifaces.len.int32:
     let m = g.ifaces[i].module
     if m != nil:
       if sfDirty in m.flags:
-        return true
-  return false
+        dbg fmt "hasDirtyModules = module {m} is dirty"
+        result = true
 
 proc isDirty*(g: ModuleGraph; m: PSym): bool =
   result = g.suggestMode and sfDirty in m.flags

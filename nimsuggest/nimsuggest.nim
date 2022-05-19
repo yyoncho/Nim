@@ -93,6 +93,7 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
 
 proc myLog(s: string) =
   dbg s
+
   # if gLogging: log(s)
 
 proc partiallyCompile(graph: ModuleGraph, index: FileIndex) =
@@ -103,17 +104,17 @@ proc partiallyCompile(graph: ModuleGraph, index: FileIndex) =
   GC_fullCollect()
   graph.resetAllModules()
   graph.compileProject()
-  myLog fmt "Recompilation finished with the following GC stats {GC_getStatistics()}"
+  myLog fmt "Recompilation finished with the following GC stats\n{GC_getStatistics()}"
 
 proc recompileFullProject(graph: ModuleGraph) =
-  myLog "recompiling full project"
+  myLog "recompiling project"
   graph.resetForBackend()
   graph.resetSystemArtifacts()
   graph.vm = nil
   GC_fullCollect()
   graph.resetAllModules()
   graph.compileProject()
-  myLog fmt "Recompilation finished with the following GC stats {GC_getStatistics()}"
+  myLog fmt "Recompilation finished with the following GC stats \n{GC_getStatistics()}"
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -162,7 +163,8 @@ proc listEpc(): SexpNode =
     argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
     docstring = sexp("line starts at 1, column at 0, dirtyfile is optional")
   result = newSList()
-  for command in ["sug", "con", "def", "use", "dus", "chk", "mod", "globalSymbols", "recompile"]:
+  for command in ["sug", "con", "def", "use", "dus", "chk", "mod",
+                  "globalSymbols", "recompile", "saved"]:
     let
       cmd = sexp(command)
       methodDesc = newSList()
@@ -210,7 +212,14 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
   let conf = graph.config
   conf.ideCmd = cmd
 
-  myLog fmt "cmd: {cmd}, suggestVersion: {conf.suggestVersion}, file: {file.string}, dirtyFile: {dirtyfile.string} [${line}:{col}]"
+  myLog fmt "cmd: {cmd}, file: {file}[{line}:{col}], dirtyFile: {dirtyfile}"
+
+  if graph.hasDirtyModules():
+    if cmd in {ideUse, ideDus, ideGlobalSymbols, ideChk}:
+      graph.recompilePartially()
+    elif cmd in {ideSug, ideOutline, ideHighlight}:
+      graph.recompilePartially(fileInfoIdx(conf, file, isKnownFile))
+
   case cmd
   of ideDef:
     let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
@@ -230,7 +239,16 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
     if symData.sym != nil:
       graph.usagesInCurrentFile(symData.sym, dirtyIdx)
   of ideRecompile:
-    graph.recompileFullProject()
+    if file.string != "clean": graph.recompileFullProject()
+    else: graph.recompilePartially()
+  of ideSaved:
+    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+    graph.markDirty dirtyIdx
+    graph.markClientsDirty dirtyIdx
+  of ideOutline:
+    discard
+    # if file.string == "clean": graph.recompileFullProject()
+    # else: graph.recompilePartially()
   of ideChk:
     myLog fmt "Reporting {graph.suggestErrors.len} error(s)"
     for sug in graph.suggestErrors:
@@ -497,6 +515,7 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
   of "terse": toggle optIdeTerse
   of "known": conf.ideCmd = ideKnown
   of "project": conf.ideCmd = ideProject
+  of "saved": conf.ideCmd = ideSaved
   else: err()
   var dirtyfile = ""
   var orig = ""
