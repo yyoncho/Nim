@@ -204,6 +204,12 @@ proc usagesInCurrentFile(g: ModuleGraph, s: PSym, fileIndex: FileIndex) =
         suggest = symToSuggest(g, s, isLocal=false, section, info, 100, PrefixMatch.None, false, 0)
       suggestResult(g.config, suggest)
 
+proc findSymData(graph: ModuleGraph, file: AbsoluteFile; line, col: int):
+    tuple[sym: PSym, info: TLineInfo] =
+  var isKnownFile: bool;
+  let fileIdx = fileInfoIdx(graph.config, file, isKnownFile)
+  result = graph.findSymbol newLineInfo(fileIdx, line, col)
+
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   var isKnownFile = true
@@ -220,42 +226,40 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
 
   case cmd
   of ideDef:
-    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let symData = graph.findSymbol newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymData(file, line, col)
     if symData.sym != nil:
       suggestResult(conf,
                     symToSuggest(graph, symData.sym, isLocal=false,
                                  ideDef, symData.info, 100, PrefixMatch.None, false, 0))
   of ideUse, ideDus:
-    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let symData = graph.findSymbol newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymData(file, line, col)
     if symData.sym != nil:
       graph.usages(symData.sym)
   of ideHighlight:
-    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let symData = graph.findSymbol newLineInfo(dirtyIdx, line, col)
+    let symData = graph.findSymData(file, line, col)
     if symData.sym != nil:
-      graph.usagesInCurrentFile(symData.sym, dirtyIdx)
+      graph.usagesInCurrentFile(symData.sym, fileInfoIdx(graph.config, file, isKnownFile))
   of ideRecompile:
     if file.string != "clean": graph.recompileFullProject()
     else: graph.recompilePartially()
   of ideSaved:
-    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    graph.markDirty dirtyIdx
-    graph.markClientsDirty dirtyIdx
+    let fileIdx = fileInfoIdx(conf, file, isKnownFile)
+    graph.markDirty fileIdx
+    graph.markClientsDirty fileIdx
   of ideOutline:
     let
-      dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-      module = graph.getModule dirtyIdx
+      fileIdx = fileInfoIdx(conf, file, isKnownFile)
+      module = graph.getModule fileIdx
       symbols = graph.suggestSymbols
-        .getOrDefault(dirtyIdx)
+        .getOrDefault(fileIdx)
         .filterIt(it.sym.info == it.info and it.sym.owner == module)
         .deduplicate()
 
     for (sym, _) in symbols:
-      suggestResult(conf,
-                    symToSuggest(graph, sym, false,
-                                 ideOutline, sym.info, 100, PrefixMatch.None, false, 0))
+      suggestResult(
+        conf,
+        symToSuggest(graph, sym, false,
+                     ideOutline, sym.info, 100, PrefixMatch.None, false, 0))
 
   of ideChk:
     myLog fmt "Reporting {graph.suggestErrors.len} error(s)"
@@ -274,14 +278,7 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
         # stop after first 100 results
         if counter > 100:
           break
-  else:
-    let dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
-    let trackPos = newLineInfo(dirtyIdx, line, col)
-    let modIdx = graph.parentModule(dirtyIdx)
-    graph.markDirty dirtyIdx
-    graph.markClientsDirty dirtyIdx
-    if isKnownFile:
-      graph.compileProject(modIdx)
+  else: discard
 
 proc execute(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
