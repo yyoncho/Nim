@@ -248,9 +248,19 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
     graph.markDirty dirtyIdx
     graph.markClientsDirty dirtyIdx
   of ideOutline:
-    discard
-    # if file.string == "clean": graph.recompileFullProject()
-    # else: graph.recompilePartially()
+    let
+      dirtyIdx = fileInfoIdx(conf, file, isKnownFile)
+      module = graph.getModule dirtyIdx
+      symbols = graph.suggestSymbols
+        .getOrDefault(dirtyIdx)
+        .filterIt(it.sym.info == it.info and it.sym.owner == module)
+        .deduplicate()
+
+    for (sym, _) in symbols:
+      suggestResult(conf,
+                    symToSuggest(graph, sym, false,
+                                 ideOutline, sym.info, 100, PrefixMatch.None, false, 0))
+
   of ideChk:
     myLog fmt "Reporting {graph.suggestErrors.len} error(s)"
     for sug in graph.suggestErrorsIter:
