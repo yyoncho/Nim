@@ -100,11 +100,7 @@ proc recompilePartially(graph: ModuleGraph, projectFileIdx = InvalidFileIdx) =
   myLog "recompiling partially"
   graph.typeInstCache.clear()
   graph.procInstCache.clear()
-  # graph.resetForBackend()
-  # graph.resetSystemArtifacts()
-  # graph.vm = nil
   GC_fullCollect()
-  # graph.resetAllModules()
   graph.compileProject(projectFileIdx)
   myLog fmt "Recompilation finished with the following GC stats\n{GC_getStatistics()}"
 
