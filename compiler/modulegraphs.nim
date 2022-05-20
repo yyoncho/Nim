@@ -573,7 +573,10 @@ import renderer
 
 proc markDirty*(g: ModuleGraph; fileIdx: FileIndex) =
   let m = g.getModule fileIdx
-  if m != nil: incl m.flags, sfDirty
+  if m != nil:
+    g.suggestSymbols.del(fileIdx)
+    g.suggestErrors.del(fileIdx)
+    incl m.flags, sfDirty
 
 proc markClientsDirty*(g: ModuleGraph; fileIdx: FileIndex) =
   # we need to mark its dependent modules D as dirty right away because after
