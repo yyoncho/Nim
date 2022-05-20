@@ -205,13 +205,18 @@ proc findSymData(graph: ModuleGraph, file: AbsoluteFile; line, col: int):
   let fileIdx = fileInfoIdx(graph.config, file)
   result = graph.findSymbol newLineInfo(fileIdx, line, col)
 
-proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
+proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   var isKnownFile = true
   let conf = graph.config
   conf.ideCmd = cmd
 
   myLog fmt "cmd: {cmd}, file: {file}[{line}:{col}], dirtyFile: {dirtyfile}"
+
+  msgs.setDirtyFile(
+    conf,
+    fileInfoIdx(conf, file),
+    if dirtyfile.isEmpty: AbsoluteFile"" else: dirtyfile)
 
   # these commands require fully compiled project
   if cmd in {ideUse, ideDus, ideGlobalSymbols, ideChk} and graph.hasDirtyModules():
@@ -220,7 +225,7 @@ proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
   # these commands require partially compiled project
   # TODO: we should should check only if there are downstream
   if cmd in {ideSug, ideOutline, ideHighlight, ideDef} and graph.hasDirtyModules():
-    graph.recompilePartially(fileInfoIdx(conf, file, isKnownFile))
+    graph.recompilePartially(fileInfoIdx(conf, file))
 
   case cmd
   of ideDef:
