@@ -204,6 +204,7 @@ proc findSymData(graph: ModuleGraph, file: AbsoluteFile; line, col: int):
     tuple[sym: PSym, info: TLineInfo] =
   let fileIdx = fileInfoIdx(graph.config, file)
   result = graph.findSymbol newLineInfo(fileIdx, line, col)
+
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   var isKnownFile = true
