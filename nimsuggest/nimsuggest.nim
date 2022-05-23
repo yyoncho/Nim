@@ -94,16 +94,7 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
 
 proc myLog(s: string) =
   dbg s
-
   # if gLogging: log(s)
-
-proc recompilePartially(graph: ModuleGraph, projectFileIdx = InvalidFileIdx) =
-  myLog "recompiling partially"
-  graph.typeInstCache.clear()
-  graph.procInstCache.clear()
-  GC_fullCollect()
-  graph.compileProject(projectFileIdx)
-  myLog fmt "Recompilation finished with the following GC stats\n{GC_getStatistics()}"
 
 proc recompileFullProject(graph: ModuleGraph) =
   myLog "recompiling project"
@@ -114,6 +105,18 @@ proc recompileFullProject(graph: ModuleGraph) =
   graph.resetAllModules()
   graph.compileProject()
   myLog fmt "Recompilation finished with the following GC stats \n{GC_getStatistics()}"
+
+proc recompilePartially(graph: ModuleGraph, projectFileIdx = InvalidFileIdx) =
+  myLog "recompiling partially"
+  graph.typeInstCache.clear()
+  graph.procInstCache.clear()
+  GC_fullCollect()
+  try:
+    graph.compileProject(projectFileIdx)
+    myLog fmt "Recompilation finished with the following GC stats\n{GC_getStatistics()}"
+  except Exception as e:
+    myLog fmt "Faield to recompile partially with the following error:\n {e.msg}"
+    graph.recompileFullProject()
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -206,6 +209,15 @@ proc findSymData(graph: ModuleGraph, file: AbsoluteFile; line, col: int):
   let fileIdx = fileInfoIdx(graph.config, file)
   result = graph.findSymbol newLineInfo(fileIdx, line, col)
 
+proc markDirtyIfNeeded(graph: ModuleGraph, file: string, originalFileIdx: FileIndex) =
+  let sha = $sha1.secureHashFile(file)
+  if graph.config.m.fileInfos[originalFileIdx.int32].hash != sha:
+    myLog fmt "{file} changed compared to last compilation"
+    graph.markDirty originalFileIdx
+    graph.markClientsDirty originalFileIdx
+  else:
+    myLog fmt "No changes in file {file} compared to last compilation"
+
 proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
   var isKnownFile = true
@@ -220,15 +232,7 @@ proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, li
     if dirtyfile.isEmpty: AbsoluteFile"" else: dirtyfile)
 
   if not dirtyfile.isEmpty:
-    let
-      fileIdx = fileInfoIdx(conf, file)
-      sha = $sha1.secureHashFile(dirtyfile.string)
-    if conf.m.fileInfos[fileIdx.int32].hash != sha:
-      myLog fmt "{dirtyfile} changed compared to last compilation"
-      graph.markDirty fileIdx
-      graph.markClientsDirty fileIdx
-    else:
-      myLog fmt "No changes in dirty file {dirtyfile} compared to last compilation"
+    graph.markDirtyIfNeeded(dirtyFile.string, fileInfoIdx(conf, file))
 
   # these commands require fully compiled project
   if cmd in {ideUse, ideDus, ideGlobalSymbols, ideChk} and graph.hasDirtyModules():
@@ -268,17 +272,15 @@ proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, li
         .deduplicate()
       myLog fmt "Found {usages.len} ideHighlight"
       for (sym, info) in usages:
-        suggestResult(
-          conf,
-          symToSuggest(graph, sym, false,
-                       ideUse, info, 100, PrefixMatch.None, false, 0))
+        let suggest = symToSuggest(graph, sym, false,
+                       ideUse, info, 100, PrefixMatch.None, false, 0)
+        if suggest.filePath != "":
+          suggestResult(conf, suggest)
   of ideRecompile:
     if file.string != "clean": graph.recompileFullProject()
     else: graph.recompilePartially()
   of ideSaved:
-    let fileIdx = fileInfoIdx(conf, file)
-    graph.markDirty fileIdx
-    graph.markClientsDirty fileIdx
+    graph.markDirtyIfNeeded(file.string, fileInfoIdx(conf, file))
   of ideOutline:
     let
       fileIdx = fileInfoIdx(conf, file)
