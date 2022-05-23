@@ -240,7 +240,6 @@ proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, li
     let fileIndex = fileInfoIdx(conf, file)
     if graph.hasDirtyDeps(fileIndex):
       graph.recompilePartially(fileIndex)
-
   case cmd
   of ideDef:
     let
@@ -251,9 +250,14 @@ proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, li
                     symToSuggest(graph, symData.sym, isLocal=false,
                                  ideDef, symData.info, 100, PrefixMatch.None, false, 0))
   of ideUse, ideDus:
-    let symData = graph.findSymData(file, line, col)
-    if symData.sym != nil:
-      graph.usages(symData.sym)
+    let symbol = graph.findSymData(file, line, col).sym
+    if symbol != nil:
+      for (sym, info) in graph.suggestSymbolsIter:
+        if sym == symbol:
+          suggestResult(
+            conf,
+            symToSuggest(graph, sym, false,
+                         ideUse, info, 100, PrefixMatch.None, false, 0))
   of ideHighlight:
     let sym = graph.findSymData(file, line, col).sym
     if sym != nil:
@@ -262,13 +266,12 @@ proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, li
         .getOrDefault(fileInfoIdx(conf, file))
         .filterIt(it.sym == sym)
         .deduplicate()
-      dbg fmt "Found {usages.len} ideHighlight"
+      myLog fmt "Found {usages.len} ideHighlight"
       for (sym, info) in usages:
         suggestResult(
           conf,
           symToSuggest(graph, sym, false,
                        ideUse, info, 100, PrefixMatch.None, false, 0))
-
   of ideRecompile:
     if file.string != "clean": graph.recompileFullProject()
     else: graph.recompilePartially()
