@@ -11,6 +11,7 @@ import compiler/renderer
 import strformat
 import tables
 import re
+import std/sha1
 ## Nimsuggest is a tool that helps to give editors IDE like capabilities.
 
 when not defined(nimcore):
@@ -218,18 +219,33 @@ proc executeNoHooks(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, li
     fileInfoIdx(conf, file),
     if dirtyfile.isEmpty: AbsoluteFile"" else: dirtyfile)
 
+  if not dirtyfile.isEmpty:
+    let
+      fileIdx = fileInfoIdx(conf, file)
+      sha = $sha1.secureHashFile(dirtyfile.string)
+    if conf.m.fileInfos[fileIdx.int32].hash != sha:
+      myLog fmt "{dirtyfile} changed compared to last compilation"
+      graph.markDirty fileIdx
+      graph.markClientsDirty fileIdx
+    else:
+      myLog fmt "No changes in dirty file {dirtyfile} compared to last compilation"
+
   # these commands require fully compiled project
   if cmd in {ideUse, ideDus, ideGlobalSymbols, ideChk} and graph.hasDirtyModules():
     graph.recompilePartially()
 
   # these commands require partially compiled project
   # TODO: we should should check only if there are downstream
-  if cmd in {ideSug, ideOutline, ideHighlight, ideDef} and graph.hasDirtyModules():
-    graph.recompilePartially(fileInfoIdx(conf, file))
+  elif cmd in {ideSug, ideOutline, ideHighlight, ideDef}:
+    let fileIndex = fileInfoIdx(conf, file)
+    if graph.hasDirtyDeps(fileIndex):
+      graph.recompilePartially(fileIndex)
 
   case cmd
   of ideDef:
-    let symData = graph.findSymData(file, line, col)
+    let
+      fileIdx = fileInfoIdx(conf, file)
+      symData = graph.findSymData(file, line, col)
     if symData.sym != nil:
       suggestResult(conf,
                     symToSuggest(graph, symData.sym, isLocal=false,

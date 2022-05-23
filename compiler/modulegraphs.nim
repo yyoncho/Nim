@@ -605,6 +605,18 @@ proc hasDirtyModules*(g: ModuleGraph): bool =
         dbg fmt "hasDirtyModules = module {m} is dirty"
         result = true
 
+proc hasDirtyDeps*(g: ModuleGraph, fileIdx: FileIndex): bool =
+  let module = g.ifaces[fileIdx.int32].module
+  if sfDirty in module.flags:
+    dbg fmt "hasDirtyModules = module {module} is dirty"
+    result = true
+
+  for i in 0i32..<g.ifaces.len.int32:
+    let m = g.ifaces[i].module
+    if m != nil and sfDirty in m.flags and g.deps.contains(fileIdx.int32.dependsOn(i)):
+      dbg fmt "hasDirtyModules = module {m} is dirty and {module} depends on it"
+      result = true
+
 proc isDirty*(g: ModuleGraph; m: PSym): bool =
   result = g.suggestMode and sfDirty in m.flags
 

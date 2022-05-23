@@ -123,6 +123,7 @@ proc partOfStdlib(x: PSym): bool =
 import renderer
 import strutils
 import strformat
+import std/sha1
 
 proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                     stream: PLLStream): bool {.discardable.} =
@@ -143,6 +144,11 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       return false
   else:
     s = stream
+
+  when defined(nimsuggest):
+    let filename = toFullPathConsiderDirty(graph.config, fileIdx).string
+    msgs.setHash(graph.config, fileIdx, $sha1.secureHashFile(filename))
+
   while true:
     openParser(p, fileIdx, s, graph.cache, graph.config)
 
