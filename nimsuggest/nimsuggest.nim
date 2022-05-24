@@ -99,7 +99,8 @@ proc errorHook(conf: ConfigRef; info: TLineInfo; msg: string; sev: Severity) =
     forth: $sev))
 
 proc myLog(s: string) =
-  if gLogging: log(s)
+  dbg s
+  # if gLogging: log(s)
 
 const
   seps = {':', ';', ' ', '\t'}

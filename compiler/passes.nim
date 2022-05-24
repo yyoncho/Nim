@@ -120,6 +120,10 @@ proc partOfStdlib(x: PSym): bool =
     it = it.owner
   result = it != nil and it.name.s == "stdlib"
 
+import renderer
+import strutils
+import strformat
+
 proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                     stream: PLLStream): bool {.discardable.} =
   if graph.stopCompile(): return true
@@ -128,6 +132,7 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
     a: TPassContextArray
     s: PLLStream
     fileIdx = module.fileIdx
+  dbg ">>>> " & $module
   prepareConfigNotes(graph, module)
   openPasses(graph, a, module, idgen)
   if stream == nil:
@@ -202,3 +207,4 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
     # They are responsible for closing the rod files. See `cbackend.nim`.
     closeRodFile(graph, module)
   result = true
+  dbg "<<<< " & $module
