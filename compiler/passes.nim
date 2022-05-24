@@ -14,7 +14,7 @@ import
   options, ast, llstream, msgs,
   idents,
   syntaxes, modulegraphs, reorder,
-  lineinfos, pathutils
+  lineinfos, pathutils, std/sha1
 
 when defined(nimPreviewSlimSystem):
   import std/syncio
@@ -138,6 +138,11 @@ proc processModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       return false
   else:
     s = stream
+
+  when defined(nimsuggest):
+    let filename = toFullPathConsiderDirty(graph.config, fileIdx).string
+    msgs.setHash(graph.config, fileIdx, $sha1.secureHashFile(filename))
+
   while true:
     openParser(p, fileIdx, s, graph.cache, graph.config)
 
