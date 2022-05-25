@@ -28,6 +28,7 @@ import compiler / [options, commands, modules, sem,
   idents, modulegraphs, prefixmatches, lineinfos, cmdlinehelper,
   pathutils]
 
+
 when defined(windows):
   import winlean
 else:
@@ -726,6 +727,10 @@ proc suggestResultUseOrDef(graph: ModuleGraph, sym: PSym, info: TLineInfo) =
                              info, 100, PrefixMatch.None, false, 0)
   suggestResult(graph.config, suggest)
 
+proc positionBefore(info: TLineInfo, line, col: int): bool =
+  result = info.line < line.uint16 or
+           (info.line == line.uint16 and info.col < col.int16)
+
 proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, line, col: int;
     graph: ModuleGraph) =
   graph.config.writelnHook = proc (s: string) = discard
@@ -820,9 +825,18 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
         # stop after first 100 results
         if counter > 100:
           break
-  else:
-    # TODO ideSug
-    discard
+  of ideSug:
+    let
+      fileIdx = fileInfoIdx(conf, file)
+      module = graph.getModule fileIdx
+      localDefinitions = graph.suggestSymbols
+        .getOrDefault(fileIdx)
+        .filterIt(it.sym.info == it.info and
+                  positionBefore(it.info, line, col))
+
+    for (sym, _) in localDefinitions:
+      graph.suggestResultUseOrDef(sym, sym.info)
+  else: discard
 
 # v3 end
 when isMainModule:
