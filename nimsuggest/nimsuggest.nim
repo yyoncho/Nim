@@ -773,10 +773,9 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.unmarkAllDirty()
 
   # these commands require partially compiled project
-  # TODO: we should should check only if there are downstream
-  elif cmd in {ideSug, ideOutline, ideHighlight, ideDef}:
-    if graph.needsCompilation(fileIndex):
-      graph.recompilePartially(fileIndex)
+  elif cmd in {ideSug, ideOutline, ideHighlight, ideDef} and
+       graph.needsCompilation(fileIndex):
+    graph.recompilePartially(fileIndex)
 
   case cmd
   of ideDef:
