@@ -10,7 +10,6 @@
 import compiler/renderer
 import strformat
 import tables
-import re
 import std/sha1
 import segfaults
 import times
@@ -177,11 +176,12 @@ proc symFromInfo(graph: ModuleGraph; trackPos: TLineInfo): PSym =
 
 proc executeNoHooks(cmd: IdeCmd, file, dirtyfile: AbsoluteFile, line, col: int;
              graph: ModuleGraph) =
-  if graph.config.suggestVersion == 3:
+  let conf = graph.config
+
+  if conf.suggestVersion == 3:
     executeNoHooksV3(cmd, file, dirtyfile, line, col, graph)
     return
 
-  let conf = graph.config
   myLog("cmd: " & $cmd & ", file: " & file.string &
         ", dirtyFile: " & dirtyfile.string &
         "[" & $line & ":" & $col & "]")
@@ -487,6 +487,7 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
 
 template benchmark(benchmarkName: string, code: untyped) =
   block:
+    myLog "Started [" & benchmarkName & "]..."
     let t0 = epochTime()
     code
     let elapsed = epochTime() - t0
@@ -715,7 +716,7 @@ proc findSymData(graph: ModuleGraph, file: AbsoluteFile; line, col: int):
 
 proc markDirtyIfNeeded(graph: ModuleGraph, file: string, originalFileIdx: FileIndex) =
   let sha = $sha1.secureHashFile(file)
-  if graph.config.m.fileInfos[originalFileIdx.int32].hash != sha:
+  if graph.config.m.fileInfos[originalFileIdx.int32].hash != sha or graph.config.ideCmd == ideSug:
     myLog fmt "{file} changed compared to last compilation"
     graph.markDirty originalFileIdx
     graph.markClientsDirty originalFileIdx
@@ -737,6 +738,11 @@ proc positionBefore(info: TLineInfo, line, col: int): bool =
   result = info.line < line.uint16 or
            (info.line == line.uint16 and info.col < col.int16)
 
+proc findParents(n: PNode, parents: var seq[PNode]) =
+  for i in 0 ..< safeLen(n):
+    myLog fmt "fp -> {n[i].kind}"
+    findParents(n[i], parents)
+
 proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, line, col: int;
     graph: ModuleGraph) =
   graph.config.writelnHook = proc (s: string) = discard
@@ -745,23 +751,35 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       line: toLinenumber(info), column: toColumn(info), doc: msg, forth: $sev)
     graph.suggestErrors.mgetOrPut(info.fileIndex, @[]).add suggest
   let conf = graph.config
+
+  # if cmd == ideSug:
+  #   conf.suggestionResultHook = sugResultHook
+  # else:
+  #   conf.suggestionResultHook = proc (s: Suggest) = discard
+
+  # we don't want the ideSug related logic from v1/2 to run, thus override the
+  # command. Technically ConfigRef.ideCmd should not be needed at all for v3
+  # conf.ideCmd = if cmd == ideSug: ideOutline else: cmd
   conf.ideCmd = cmd
 
   myLog fmt "cmd: {cmd}, file: {file}[{line}:{col}], dirtyFile: {dirtyfile}"
 
-  if not fileInfoKnown(conf, file):
-    myLog fmt "{file} is unknown, returning no results"
-    return
+  var fileIndex: FileIndex
 
-  let fileIndex = fileInfoIdx(conf, file)
+  if not (cmd in {ideRecompile, ideGlobalSymbols}):
+    if not fileInfoKnown(conf, file):
+      myLog fmt "{file} is unknown, returning no results"
+      return
 
-  msgs.setDirtyFile(
-    conf,
-    fileIndex,
-    if dirtyfile.isEmpty: AbsoluteFile"" else: dirtyfile)
+    fileIndex = fileInfoIdx(conf, file)
+    myLog fmt "File {file} mapped to {fileIndex.int}, module = {graph.getModule(fileIndex)}"
+    msgs.setDirtyFile(
+      conf,
+      fileIndex,
+      if dirtyfile.isEmpty: AbsoluteFile"" else: dirtyfile)
 
-  if not dirtyfile.isEmpty:
-    graph.markDirtyIfNeeded(dirtyFile.string, fileInfoIdx(conf, file))
+    if not dirtyfile.isEmpty:
+      graph.markDirtyIfNeeded(dirtyFile.string, fileInfoIdx(conf, file))
 
   # these commands require fully compiled project
   if cmd in {ideUse, ideDus, ideGlobalSymbols, ideChk} and graph.needsCompilation():
@@ -819,10 +837,9 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       suggestResult(graph.config, sug)
   of ideGlobalSymbols:
     var counter = 0
-    let reg = re(string(file))
     for (sym, info) in graph.suggestSymbolsIter:
       if sfGlobal in sym.flags:
-        if find(cstring(sym.name.s), reg, 0, sym.name.s.len) != -1:
+        if sym.name.s.len >= file.string.len and startsWith(sym.name.s, file.string):
           inc counter
           suggestResult(conf,
                         symToSuggest(graph, sym, isLocal=false,
@@ -831,20 +848,23 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
         if counter > 100:
           break
   of ideSug:
-    let
-      module = graph.getModule fileIndex
-      localDefinitions = graph.suggestSymbols
-        .getOrDefault(fileIndex, @[])
-        .filterIt(it.sym.info == it.info and
-                  it.info.fileIndex == fileIndex and
-                  positionBefore(it.info, line, col))
+    discard
+    # let
+    #   module = graph.getModule fileIndex
+    #   localDefinitions = graph.suggestSymbols
+    #     .getOrDefault(fileIndex, @[])
+    #     .filterIt(it.sym.info == it.info and
+    #               it.info.fileIndex == fileIndex and
+    #               positionBefore(it.info, line, col))
+    # #echo "checking node ", n.info
+    # var node = module.ast
 
-    for (sym, info) in graph.suggestSymbols.getOrDefault(fileIndex, @[]):
-      myLog fmt "XXXXX -> {sym}"
+    # var parents: seq[PNode] = @[]
 
+    # findParents(node, parents)
+    # for (sym, _) in localDefinitions:
+    #   graph.suggestResult(sym, sym.info, ideSug)
 
-    for (sym, _) in localDefinitions:
-      graph.suggestResult(sym, sym.info, ideUse)
   else: discard
 
 # v3 end

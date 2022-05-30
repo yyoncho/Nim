@@ -210,7 +210,10 @@ proc `$`*(suggest: Suggest): string =
         result.add(sep)
         result.add($suggest.prefix)
 
+import strformat
+
 proc suggestResult*(conf: ConfigRef; s: Suggest) =
+  dbg fmt "XXXXXXXXXXXXXXXXXXX {s[]}"
   if not isNil(conf.suggestionResultHook):
     conf.suggestionResultHook(s)
   else:
@@ -497,7 +500,9 @@ proc suggestSym*(g: ModuleGraph; info: TLineInfo; s: PSym; usageSym: var PSym; i
   ## misnamed: should be 'symDeclared'
   let conf = g.config
   when defined(nimsuggest):
-    g.suggestSymbols.mgetOrPut(info.fileIndex, @[]).add (s, info)
+    if not g.suggestSymbols.getOrDefault(info.fileIndex, @[]).contains (s, info):
+      g.suggestSymbols.mgetOrPut(info.fileIndex, @[]).add (s, info)
+
     if conf.suggestVersion == 0:
       if s.allUsages.len == 0:
         s.allUsages = @[info]

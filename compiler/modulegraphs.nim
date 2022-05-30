@@ -227,6 +227,9 @@ proc nextModuleIter*(mi: var ModuleIter; g: ModuleGraph): PSym =
   else:
     result = nextIdentIter(mi.ti, g.ifaces[mi.modIndex].interfSelect(mi.importHidden))
 
+import renderer
+import strformat
+
 iterator allSyms*(g: ModuleGraph; m: PSym): PSym =
   let importHidden = optImportHidden in m.options
   if isCachedModule(g, m):
@@ -393,8 +396,7 @@ else:
 
     template onDef*(info: TLineInfo; s: PSym) =
       let c = getPContext()
-      if c.graph.config.suggestVersion == 3 and
-          not c.graph.suggestSymbols.getOrDefault(info.fileIndex, @[]).contains (s, info):
+      if c.graph.config.suggestVersion == 3:
         suggestSym(c.graph, info, s, c.graph.usageSym)
 
     template onDefResolveForward*(info: TLineInfo; s: PSym) = discard
@@ -597,22 +599,28 @@ proc markClientsDirty*(g: ModuleGraph; fileIdx: FileIndex) =
     if g.deps.contains(i.dependsOn(fileIdx.int)):
       g.markDirty(FileIndex(i))
 
+import renderer
+import strformat
+
 proc needsCompilation*(g: ModuleGraph): bool =
   # every module that *depends* on this file is also dirty:
   for i in 0i32..<g.ifaces.len.int32:
     let m = g.ifaces[i].module
     if m != nil:
       if sfDirty in m.flags:
+        dbg fmt "needsCompilation() > {m} is dirty"
         return true
 
 proc needsCompilation*(g: ModuleGraph, fileIdx: FileIndex): bool =
-  let module = g.ifaces[fileIdx.int32].module
-  if module == nil or g.isDirty(module):
+  let module = g.getModule(fileIdx)
+  if module != nil and g.isDirty(module):
+    dbg fmt "needsCompilation(fileIdx) > {module} is dirty"
     return true
 
   for i in 0i32..<g.ifaces.len.int32:
     let m = g.ifaces[i].module
     if m != nil and g.isDirty(m) and g.deps.contains(fileIdx.int32.dependsOn(i)):
+      dbg fmt "needsCompilation(fileIdx) > {m} is dirty"
       return true
 
 proc getBody*(g: ModuleGraph; s: PSym): PNode {.inline.} =
