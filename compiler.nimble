@@ -6,4 +6,4 @@ license = "MIT"
 
 installDirs = @["compiler", "nimsuggest"]
 
-requires "nim >= 0.14.0"
+# requires "nim >= 0.14.0"
