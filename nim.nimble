@@ -1,9 +1,6 @@
-
-version = system.NimVersion
+version = 1.7.1
 author = "Andreas Rumpf"
 description = "Compiler package providing the compiler sources as a library."
 license = "MIT"
 
-installDirs = @["compiler", "nimsuggest"]
-
-# requires "nim >= 0.14.0"
+bin = @["compiler/nim", "nimsuggest/nimsuggest"]
