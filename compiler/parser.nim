@@ -353,7 +353,7 @@ proc colcom(p: var Parser, n: PNode) =
 
 const tkBuiltInMagics = {tkType, tkStatic, tkAddr}
 
-template  setEndInfo() =
+template setEndInfo() =
   when defined(nimsuggest):
     result.endInfo = TLineInfo(fileIndex: p.lex.fileIdx,
                      line: p.lex.previousTokenEnd.line,
