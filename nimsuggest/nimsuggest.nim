@@ -140,7 +140,7 @@ proc sexp(s: Suggest): SexpNode =
   ])
   if s.section == ideSug:
     result.add convertSexp(s.prefix)
-  if s.section == ideOutline and s.version == 3:
+  if s.section in {ideOutline, ideExpand} and s.version == 3:
     result.add convertSexp(s.endLine.int)
     result.add convertSexp(s.endCol)
 
@@ -839,6 +839,18 @@ proc iterateOutlineNodes(graph: ModuleGraph, n: PNode, infoPairs: seq[SymInfoPai
     for child in n:
       graph.iterateOutlineNodes(child, infoPairs)
 
+proc calculateExpandRange(n: PNode, info: TLineInfo): TLineInfo =
+  if ((n.kind in {nkFuncDef, nkProcDef, nkIteratorDef, nkTemplateDef, nkMethodDef, nkConverterDef} and
+          n.info.exactEquals(info)) or
+         (n.kind in {nkCall, nkCommand} and n[0].info.exactEquals(info))):
+    result = n.endInfo
+  else:
+    for child in n:
+      result = child.calculateExpandRange(info)
+      if result != unknownLineInfo:
+        return result
+    result = unknownLineInfo
+
 proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, line, col: int; tag: string,
     graph: ModuleGraph) =
   let conf = graph.config
@@ -1010,8 +1022,20 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.recompilePartially()
     var suggest = Suggest()
     suggest.section = ideExpand
+    suggest.version = 3
+    suggest.line = line
+    suggest.column = col
     suggest.doc = graph.config.expandNodeResult
+    if suggest.doc != "":
+      let
+        n = parseFile(fileIndex, graph.cache, graph.config)
+        endInfo = n.calculateExpandRange(conf.expandPosition)
+
+      suggest.endLine = endInfo.line
+      suggest.endCol = endInfo.col
+
     suggestResult(graph.config, suggest)
+
     graph.markDirty fileIndex
     graph.markClientsDirty fileIndex
   else:

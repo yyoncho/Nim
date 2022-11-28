@@ -220,7 +220,7 @@ proc `$`*(suggest: Suggest): string =
         result.add(sep)
         result.add($suggest.prefix)
 
-  if (suggest.version == 3 and suggest.section == ideOutline):
+  if (suggest.version == 3 and suggest.section in {ideOutline, ideExpand}):
     result.add(sep)
     result.add($suggest.endLine)
     result.add(sep)
